@@ -7,7 +7,7 @@ UniTakip; farklı okul sistemlerindeki yaklaşan teslimleri, açıklanan notlar�
 > [!IMPORTANT]
 > Bu depo bir SaaS hizmeti değil, kendi hesabına kurduğun kişisel bir takip sistemidir. Okul ve Gmail bilgilerin geliştiriciyle paylaşılmaz; oturumları ve anahtarları kendi bilgisayarında ve kendi Cloudflare hesabında yönetirsin.
 
-[Özellikler](#özellikler) · [Hızlı demo](#hızlı-demo) · [Cloudflare kurulumu](#cloudflare-kurulumu) · [Oturum yenileme](#yeniden-giris) · [Destek](#destek)
+[Ekran görüntüleri](#ekran-görüntüleri) · [İndirme](#indirme) · [Hızlı demo](#hızlı-demo) · [Cloudflare kurulumu](#cloudflare-kurulumu) · [Classroom](#classroom-kurulumu) · [Oturum yenileme](#yeniden-giris) · [Destek](#destek)
 
 ## Özellikler
 
@@ -38,17 +38,27 @@ Bu sürüm, kendi derslerimi takip etmek için kullandığım UniTakip sistemini
 | --- | --- |
 | [![Teslim tarihlerine göre ödev listesi](docs/gorseller/teslimler.png)](docs/gorseller/teslimler.png) | [![Derslere göre sınav sonuçları](docs/gorseller/notlar.png)](docs/gorseller/notlar.png) |
 
-## Hızlı demo
+<a id="indirme"></a>
 
-Önce arayüzü örnek verilerle yerel olarak deneyebilirsin. Bu demo okul hesaplarına bağlanmaz ve gerçek bildirim göndermez.
+## Projeyi indir
 
-**Gereksinimler:** Git ve Node.js 24 (npm dahil). Komutlar macOS, Linux ve Windows üzerinde WSL içindir.
+Git ve npm içeren **Node.js 24** kur. Cloudflare üzerinde gerçek takip için ayrıca **Python 3.12 veya üzeri**, bir Cloudflare hesabı ve uygulama şifresi oluşturabilen bir Gmail hesabı gerekir. Bu kurulum komutlarını macOS veya Linux terminalinde, Windows’ta ise **WSL** terminalinde çalıştır. WSL kullanıyorsan Git, Node.js ve Python’u WSL içine kur.
 
 ```sh
 git clone https://github.com/BerkDrmz/unitakip-public.git unitakip
 cd unitakip
+node --version
 npm ci --prefix cloud/cloudflare
 npm ci --prefix cloud/cloudflare/ui
+```
+
+ZIP ile indirdiysen arşivi aç ve terminali `README.md` ile `cloud` klasörünün bulunduğu dizinde aç. `node --version` ve iki `npm ci` komutuyla devam et. Aşağıdaki adımlarda **proje klasörü** bu dizini ifade eder.
+
+## Hızlı demo
+
+Paneli örnek ödev ve notlarla denemek için proje klasöründe çalıştır. Demo adımı isteğe bağlıdır.
+
+```sh
 UNITAKIP_UI_DEMO=1 UNITAKIP_UI_DEMO_RICH=1 npm --prefix cloud/cloudflare/ui run dev
 ```
 
@@ -58,9 +68,11 @@ UNITAKIP_UI_DEMO=1 UNITAKIP_UI_DEMO_RICH=1 npm --prefix cloud/cloudflare/ui run 
 
 ## Cloudflare kurulumu ve arka plan takibi
 
-Kurulum için bir Cloudflare hesabı ve bildirim gönderecek bir Gmail hesabı gerekir. Aşağıdaki komutları **kendi bilgisayarının terminalinde** çalıştır. Kurulum tamamlanınca panel Cloudflare Workers üzerinde açılır. Takip kayıtlarını aynı hesaptaki SQLite tabanlı Durable Object saklar. Zamanlanmış kontrolleri Cloudflare çalıştırır. Terminali kapatabilir, günlük kullanımda paneli telefonundan açabilirsin.
+İndirme ve bağımlılık kurulumundan sonra bu adımları sırayla tamamla. Cloudflare paneli, takip kayıtlarını ve zamanlanmış kontrolleri kendi hesabında barındırır. Kurulum bittiğinde terminali kapatıp paneli telefondan veya bilgisayardan kullanabilirsin.
 
-**1. Yerel kurulumu hazırla.** Yukarıdaki indirme ve iki `npm ci` adımını tamamla. Proje klasöründe `python3 --version` çalıştır. Çıktı en az 3.12 olmalı. Mac’te 3.9 görünüyorsa Python 3.13 kurup aşağıdaki ilk satırda `python3.13 -m venv .venv` kullan. [Python indirmeleri](https://www.python.org/downloads/)
+### 1. Python ortamını hazırla
+
+Proje klasöründe `python3 --version` çalıştır. Çıktı en az 3.12 olmalı. Bilgisayarında birden fazla Python varsa ilk satırda `python3` yerine uygun sürüm komutunu kullanabilirsin. [Python indirmeleri](https://www.python.org/downloads/)
 
 ```sh
 python3 -m venv .venv
@@ -69,16 +81,30 @@ python3 -m venv .venv
 .venv/bin/unitakip init
 ```
 
-Linux veya WSL’de Chromium açılırken sistem kütüphanelerinin eksik olduğu yazarsa `.venv/bin/python -m playwright install --with-deps chromium` çalıştır. [Playwright tarayıcı kurulumu](https://playwright.dev/python/docs/browsers)
+`unitakip init`, `config/config.yaml` dosyasını ve yerel şifreleme anahtarını hazırlar. Linux veya WSL’de Chromium sistem kütüphanesi hatası verirse `.venv/bin/python -m playwright install --with-deps chromium` çalıştır. [Playwright tarayıcı kurulumu](https://playwright.dev/python/docs/browsers)
 
-**2. Gmail’i bağla.** Oluşan `config/config.yaml` dosyasının mevcut `notify` bölümünde `provider` değerini `gmail_smtp`, `to` değerini bildirimleri ve panel giriş kodunu alacağın e-posta adresi yap. Gönderen kişisel Gmail hesabında iki adımlı doğrulamayı açıp 16 karakterlik bir [uygulama şifresi oluştur](https://myaccount.google.com/apppasswords). İlk komut gönderen Gmail adresini ve bu şifreyi sorar. Gönderen ile alıcı aynıysa adres sorusunda Enter’a bas. Şifreyi yazarken karakterler görünmez. İkincisi yerel kurulum paketini hazırlar.
+### 2. Gmail giriş kodlarını ve bildirimleri ayarla
+
+`config/config.yaml` içindeki mevcut `notify` bölümünde şu iki alanı düzenle. `to` alanına giriş kodlarını ve bildirimleri almak istediğin kendi adresini yaz. Bölümdeki diğer ayarları olduğu gibi bırak.
+
+```yaml
+notify:
+  provider: gmail_smtp
+  to: "senin-adresin@example.com"
+```
+
+Gönderen Gmail hesabında iki adımlı doğrulamayı aç ve UniTakip için 16 karakterlik bir uygulama şifresi oluştur. Proje klasöründe aşağıdaki komutları çalıştır. `smtp-auth` gönderen Gmail adresini ve uygulama şifresini sorar. Gönderen ve alıcı aynıysa adres sorusunda **Enter**’a bas. Uygulama şifresi terminalde görünmeden alınır. [Gmail uygulama şifresi oluştur](https://myaccount.google.com/apppasswords) · [Google’ın hesap koşulları](https://support.google.com/accounts/answer/185833)
 
 ```sh
 .venv/bin/unitakip smtp-auth
 .venv/bin/python cloud/cloudflare/prepare.py
 ```
 
-**3. Paneli yayınla.** Cloudflare hesabında **Workers & Pages** sayfasını aç. İlk kurulumunsa hesabın için bir `workers.dev` alt alanı seç. [Cloudflare’ın alt alan kurulum rehberi](https://developers.cloudflare.com/workers/configuration/routing/workers-dev/) E-postadaki bağlantıların kendi panelini açması için [Worker ayarlarında](cloud/cloudflare/wrangler.jsonc) `PANEL_URL` değerini `https://unitakip.<alt-alan-adın>.workers.dev` biçimindeki kendi adresinle değiştir. Sonuna `/` ekleme. Aşağıdaki komutlarla aynı hesaba giriş yapıp paneli ve ayarlarını yükle.
+İlk komut Gmail oturumunu doğrular. İkinci komut Cloudflare’a yüklenecek yerel `data/cloudflare/secrets.json` dosyasını hazırlar. Uygulama şifresini yalnızca `smtp-auth` istemine gir. `secrets.json`, `.env` ve `data/` klasörünü özel tut.
+
+### 3. Paneli kendi Cloudflare hesabında yayımla
+
+Cloudflare’da **Workers & Pages** bölümünde kendine bir `workers.dev` alt alanı seç. [Worker ayarları](cloud/cloudflare/wrangler.jsonc) dosyasında `PANEL_URL` değerine `https://unitakip.ornek-hesap.workers.dev` biçimindeki kendi adresini, sondaki `/` olmadan yaz. Böylece e-postalardaki bağlantılar senin panelini açar. [Cloudflare alt alan rehberi](https://developers.cloudflare.com/workers/configuration/routing/workers-dev/)
 
 ```sh
 cd cloud/cloudflare
@@ -86,29 +112,44 @@ npx wrangler login
 npx wrangler whoami
 ```
 
-Tarayıcıdaki Cloudflare iznini onayla. `whoami` çıktısında kullanmak istediğin hesabı görünce aynı terminalde devam et. Dağıtım sonunda yazan panel adresini kaydet.
+Tarayıcıdaki Cloudflare iznini onayla. `whoami` çıktısında kendi hesabını gördüğünde aynı terminalde devam et. Dağıtım komutu paneli derler ve `secrets.json` içindeki ayarları Worker’a gizli değişken olarak yükler. [Cloudflare Worker gizli değişkenleri](https://developers.cloudflare.com/workers/configuration/secrets/#upload-secrets-alongside-code)
 
 ```sh
-npm run deploy
-npx wrangler secret bulk ../../data/cloudflare/secrets.json
+npm run deploy -- --secrets-file ../../data/cloudflare/secrets.json
 cd ../..
 ```
 
-**4. Takibi başlat.** İlk komut adresi sorduğunda dağıtım çıktısındaki kendi HTTPS panel adresini yapıştır. Gmail bağlantı testi başarılı olunca aynı adres sonraki komutlar için kaydedilir.
+### 4. Gmail bağlantısını doğrula ve takibi başlat
+
+Terminal proje klasöründeyken aşağıdaki ilk komutta örnek adres yerine Cloudflare’ın dağıtım sonunda gösterdiği kendi `https://…workers.dev` adresini yaz. Gmail kontrolü başarılı olunca bu adres sonraki komutlar ve Classroom kurulumu için yerelde kaydedilir.
 
 ```sh
-printf 'Panel adresin: '
-read -r panel_adresi
-node cloud/cloudflare/manage.mjs smtp-check "$panel_adresi" &&
+node cloud/cloudflare/manage.mjs smtp-check "https://unitakip.ornek-hesap.workers.dev" &&
   node cloud/cloudflare/manage.mjs start &&
   node cloud/cloudflare/manage.mjs status
 ```
 
-`status` çıktısında `"armed":true` takibin başladığını gösterir. Bu aşamada sıfır site görünmesi normaldir. `smtp-check` Gmail oturumunu sınar. İlk gerçek e-posta teslimini sonraki adımda panel kodunun gelen kutuna ulaşmasıyla doğrularsın.
+`status` çıktısında `"armed":true` görünüyorsa takip açıktır. İlk kurulumda site sayısının sıfır olması normaldir. Gmail’e bir iletinin ulaştığını aşağıdaki panel giriş koduyla doğrulayabilirsin.
 
-**5. İlk siteyi ekle ve doğrula.** Dağıtım çıktısındaki panel adresini telefonunda veya bilgisayarında aç. **Giriş kodu gönder** ile Gmail’e gelen kodu gir. **Siteler → Site ekle** bölümüne adresi yapıştır ve **Ekle**’ye bas. UniTakip bağlantıyı otomatik test eder ve bulduklarını kartta gösterir. Aynı alan adında tanınan bir duyuru arşivi veya duyuru akışı bulursa duyuruları ayrı ayrı izler. Genel sayfa takibi devreye girerse kart bunu belirtir. Giriş isteyen bir site için aşağıdaki yeniden bağlanma adımlarını izle. ÜBYS şablonu ilk kurulumda yalnızca ana adresi bilir. Notların ve derslerin için aşağıdaki [ÜBYS sayfalarını tanıtma](#ubys-sayfalari) adımını da tamamla. İlk tam kontrol mevcut kayıtları toplar. Sonraki değişiklikler bildirim üretir.
+### 5. Panele gir ve bir siteyi bağla
 
-`.env`, yerel `config/` dosyaların ve `data/` klasörünü güvenli bir yerde yedekle. Bu dosyalar kişisel anahtarlar ve oturum bilgileri içerir. Git bunları dışarıda tutar.
+1. Kendi `workers.dev` adresini telefondan veya bilgisayardan aç. **Giriş kodu gönder** ile Gmail’e gelen kodu gir.
+2. **Siteler → Site ekle** bölümüne okul sitesinin HTTPS adresini yapıştır ve **Ekle**’ye bas. UniTakip bağlantıyı test eder. Kart, ödev, not ve duyuru gibi hangi verileri okuyabildiğini gösterir. Site giriş isterse [yeniden giriş adımlarını](#yeniden-giris) kullan. Classroom için [kurulum komutu](#classroom-kurulumu) siteyi de otomatik ekleyebilir.
+3. **Bugün → Şimdi kontrol et** ile ilk taramayı iste. **Siteler** bölümündeki kartta **Son başarılı kontrol** zamanını ve okunan içerikleri doğrula. İlk tarama bir başlangıç kaydı oluşturur. Bildirimler sonraki değişikliklerde gelir.
+
+`.env`, yerel `config/` dosyalarını ve `data/` klasörünü güvenli bir yerde yedekle.
+
+<a id="classroom-kurulumu"></a>
+
+## Google Classroom kurulumu
+
+Cloudflare kurulumu bitince ve `"armed":true` görününce UniTakip proje klasöründe şu komutu çalıştır.
+
+```sh
+npm --prefix cloud/cloudflare run classroom:setup
+```
+
+Tarayıcıda derslerini gördüğün Google hesabını seç. Google önce kurulum aracına, ardından Apps Script projesinin Classroom erişimine izin isteyebilir. İzinleri verince ilk aktarım otomatik başlar. Google sayfası aktarımın tamamlandığını gösterdiğinde **Siteler → Google Classroom** kartında **Son Apps Script aktarımı** zamanına, **Teslimler** bölümünde ödevlerine bak. Sonraki aktarımlar saatte bir çalışır. [Adım adım Classroom rehberi ve hata çözümleri](docs/google-classroom.md#otomatik-kurulum)
 
 <a id="ubys-sayfalari"></a>
 
@@ -143,11 +184,12 @@ Cloudflare tarafında **Workers & Pages → unitakip → Settings → Trigger Ev
 | --- | --- |
 | **UniTakip giriş ekranı** | Kendi panel adresini aç, **Giriş kodu gönder** düğmesine bas ve Gmail’e gelen kodu gir. Bu işlem telefonda da bilgisayarda da çalışır. Panel oturumunun kapanması arka plan takibini durdurmaz. |
 | **Bir okul sitesinde “Giriş gerekli”** | Gmail’deki yeniden bağlanma bağlantısını aç veya panelde **Siteler → ilgili site → Panelden yeniden bağlan** yolunu izle. Sitenin kendi kullanıcı adı ve şifresiyle giriş destekleniyorsa telefondan da bilgisayardan da **Bağlan**’a bas. Site SMS kodu isterse kodu gir ve **Doğrula**’ya bas. Eski bir uyarı seni **Bugün** ekranına getirirse **Siteler** kartına bak. Oturum arada düzelmişse yeni giriş gerekmez. Diğer etkin sitelerin takibi sürer. |
+| **Classroom aktarımı gecikti** | [Classroom bağlantısını yeniden çalıştırma](docs/google-classroom.md#baglanti-duserse) adımlarını izle. |
 | **“Siteye ulaşılamadı” veya bakım uyarısı** | Biraz sonra **Bağlantıyı test et** ile tekrar dene. Site yeniden yanıt verdiğinde son başarılı kontrol zamanına bak. |
 
 **ÜBYS’ye yalnızca e-Devlet ile giriyorsan** uyarıyı telefonda açabilirsin. Okul oturumunu Cloudflare’a aktarmak için UniTakip’i kurduğun bilgisayarı kullan.
 
-1. **Siteler → ÜBYS → Panelden yeniden bağlan → Mac’te e-Devlet ile bağlan** bölümünden komutu **Kopyala**. Bilgisayarında UniTakip proje klasöründe bir terminal aç ve komutu çalıştır. Örneğin varsayılan kayıt için `.venv/bin/python cloud/cloudflare/refresh-session.py ubys` kullanılır. Karttaki komutta `--type` ve `--url` varsa onları da kopyala.
+1. **Siteler → ÜBYS → Panelden yeniden bağlan → Mac’te e-Devlet ile bağlan** bölümünden komutu **Kopyala**. Bilgisayarında UniTakip proje klasöründe bir terminal aç ve komutu çalıştır. Örneğin varsayılan kayıt için `.venv/bin/python cloud/cloudflare/refresh-session.py ubys` kullanılır. Linux veya WSL’de `python3` yerine gerekirse `.venv/bin/python` yaz. Karttaki `--type` ve `--url` seçeneklerini koru.
 2. Açılan ÜBYS sayfasında **e-Devlet ile Giriş**’i seç. T.C. kimlik numaranı ve e-Devlet şifreni yalnızca resmî `giris.turkiye.gov.tr` ekranına gir. ÜBYS’ye döndüğünde giriş otomatik algılanmazsa terminalde **Enter**’a bas.
 3. Terminal okul oturumunu kendi Cloudflare hesabına aktarmayı sorduğunda **e** yazıp **Enter**’a bas. **Oturum aktarıldı** mesajından sonra telefondan da devam edebilirsin.
 4. **Siteler → ÜBYS → Bağlantıyı test et** ile erişimi doğrula. Yeni kayıtları hemen taramak istersen **Bugün → Şimdi kontrol et**’e bas. Tur tamamlanınca ÜBYS kartında **Son başarılı kontrol** zamanını kontrol et.
