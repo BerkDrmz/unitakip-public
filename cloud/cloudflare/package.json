@@ -1,0 +1,23 @@
+{
+  "name": "unitakip-cloudflare",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "dev": "wrangler dev",
+    "build:ui": "npm --prefix ui run build",
+    "check": "npm run build:ui && wrangler deploy --dry-run --outdir dist",
+    "deploy": "npm run build:ui && wrangler deploy",
+    "classroom:setup": "node install-classroom.mjs"
+  },
+  "dependencies": {
+    "cheerio": "1.2.0",
+    "crypto-js": "4.2.0",
+    "uri-js": "4.4.1"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2",
+    "miniflare": "5.20261104.0-beta",
+    "wrangler": "4.158.0"
+  }
+}

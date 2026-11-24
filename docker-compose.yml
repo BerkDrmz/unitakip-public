@@ -1,0 +1,40 @@
+# Kullanım (sunucuda):  docker compose up -d --build
+# Loglar:               docker compose logs -f unitakip
+# Durum:                docker compose exec unitakip unitakip status
+services:
+  unitakip:
+    build: .
+    image: unitakip:latest
+    container_name: unitakip
+    restart: unless-stopped        # sunucu yeniden başlarsa otomatik kalkar
+    init: true                     # sinyal yönetimi + zombi süreç temizliği (Chromium)
+    user: "${UNITAKIP_UID:-1000}:${UNITAKIP_GID:-1000}"
+    env_file: .env                 # UNITAKIP_MASTER_KEY, UNITAKIP_NOTIFY_TO, (isteğe bağlı) ANTHROPIC_API_KEY
+    environment:
+      TZ: Europe/Istanbul
+    volumes:
+      - ./data:/app/data           # SQLite, şifreli oturumlar, arşiv, loglar (yedekle!)
+      - ./config:/app/config:ro    # config.yaml + *.pages.yaml
+    shm_size: "512m"               # Chromium için /dev/shm
+    mem_limit: 1g
+    stop_grace_period: 2m          # çalışan kontrol bitsin diye
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # İsteğe bağlı yerel LLM (en az 8 GB RAM'li sunucu): docker compose --profile local-ai up -d
+  # Ardından: docker compose exec ollama ollama pull qwen3:8b  ve config'te ai.provider: ollama,
+  # ai.ollama_url: http://ollama:11434
+  ollama:
+    image: ollama/ollama:latest
+    profiles: ["local-ai"]
+    restart: unless-stopped
+    volumes:
+      - ollama:/root/.ollama
+
+volumes:
+  ollama:

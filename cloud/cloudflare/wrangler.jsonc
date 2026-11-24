@@ -1,0 +1,46 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "unitakip",
+  "main": "src/worker.js",
+  "compatibility_date": "2026-11-01",
+  "workers_dev": true,
+  "assets": {
+    "directory": "./ui/dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/*", "!/assets/*", "!/favicon.svg"]
+  },
+  "observability": {
+    "enabled": false
+  },
+  "vars": {
+    "LIVE_ENABLED": "true",
+    // Ortak Google bağlantısı üretim doğrulamasından sonra burada etkinleştirilir.
+    "CLASSROOM_BROKER_URL": "",
+    // Uyarı e-postalarındaki "yeniden bağlan" bağlantısı için panelin adresi.
+    "PANEL_URL": ""
+  },
+  "triggers": {
+    "crons": [
+      "7,17,27,37,47,57 * * * *",
+      // Olağan kontrollerin arasında yalnızca ÜBYS oturumu yoklanır.
+      "2,12,22,32,42,52 * * * *"
+    ]
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "MONITOR",
+        "class_name": "Monitor"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": [
+        "Monitor"
+      ]
+    }
+  ]
+}

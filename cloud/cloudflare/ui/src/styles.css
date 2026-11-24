@@ -1,0 +1,356 @@
+@import "tailwindcss";
+
+/*
+  UniTakip · "takip konsolu" (yuvarlak köşeli)
+  Nötr gri zemin üzerinde noktalı ızgara, Inter başlıklar ve JetBrains Mono etiketler, tek vurgu rengi ve aciliyete göre
+  üç durum tonu. Köşeler yumuşak: kartlar 20 px, satırlar 16 px, düğmeler 12 px, çip ve etiketler tam yuvarlak.
+  Tüm renkler WCAG AA (küçük metin ≥ 4.5:1) hedefiyle seçildi; açık ve koyu tema.
+*/
+
+@theme inline {
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono Variable", ui-monospace, "SF Mono", Menlo, monospace;
+
+  --color-paper: var(--paper);
+  --color-card: var(--card);
+  --color-wash: var(--wash);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-rule: var(--rule);
+  --color-rule-strong: var(--rule-strong);
+  --color-accent: var(--accent);
+  --color-on-accent: var(--on-accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-hot: var(--hot);
+  --color-hot-soft: var(--hot-soft);
+  --color-warm: var(--warm);
+  --color-warm-soft: var(--warm-soft);
+  --color-cool: var(--cool);
+  --color-cool-soft: var(--cool-soft);
+  --color-sanal: var(--sanal);
+  --color-ogreniyorum: var(--ogreniyorum);
+  --color-ubys: var(--ubys);
+
+  --shadow-lift: 0 1px 2px 0 var(--shadow-tint);
+  --shadow-float: 0 12px 32px -12px var(--shadow-tint), 0 0 0 1px var(--rule);
+  --ease-soft: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+}
+
+:root,
+:root[data-theme="light"] {
+  --paper: #fafafa;
+  --card: #ffffff;
+  --wash: #f4f4f5;
+  --ink: #0a0a0b;
+  --ink-2: #52525b;
+  --ink-3: #65656e;
+  --rule: #e7e7ea;
+  --rule-strong: #d4d4d8;
+  --accent: #2b50e0;
+  --on-accent: #ffffff;
+  --accent-soft: #e6ebfd;
+  --hot: #c2341b;
+  --hot-soft: #fde8e3;
+  --warm: #8a5a00;
+  --warm-soft: #fbf0d9;
+  --cool: #217049;
+  --cool-soft: #e3f3e9;
+  --sanal: #0f7f73;
+  --ogreniyorum: #6d45c4;
+  --ubys: #2457d6;
+  --shadow-tint: rgb(10 10 11 / 0.08);
+  --dot: rgb(10 10 11 / 0.07);
+  color-scheme: light;
+}
+
+/* Karanlık tema: kullanıcı seçtiyse (data-theme="dark") ya da seçim "sistem" iken cihaz karanlıksa */
+:root[data-theme="dark"] {
+  --paper: #09090b;
+  --card: #111113;
+  --wash: #1a1a1d;
+  --ink: #f4f4f5;
+  --ink-2: #b4b4bb;
+  --ink-3: #8e8e97;
+  --rule: #232327;
+  --rule-strong: #303036;
+  --accent: #8ea4ff;
+  --on-accent: #09090b;
+  --accent-soft: #1b2142;
+  --hot: #ff8a6b;
+  --hot-soft: #34160f;
+  --warm: #eab35a;
+  --warm-soft: #2e230e;
+  --cool: #6fcf9f;
+  --cool-soft: #102619;
+  --sanal: #38c2b1;
+  --ogreniyorum: #a98bff;
+  --ubys: #77a0ff;
+  --shadow-tint: rgb(0 0 0 / 0.6);
+  --dot: rgb(255 255 255 / 0.06);
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+      --paper: #09090b;
+  --card: #111113;
+  --wash: #1a1a1d;
+  --ink: #f4f4f5;
+  --ink-2: #b4b4bb;
+  --ink-3: #8e8e97;
+  --rule: #232327;
+  --rule-strong: #303036;
+    --accent: #8ea4ff;
+    --on-accent: #09090b;
+    --accent-soft: #1b2142;
+    --hot: #ff8a6b;
+    --hot-soft: #34160f;
+    --warm: #eab35a;
+    --warm-soft: #2e230e;
+    --cool: #6fcf9f;
+    --cool-soft: #102619;
+    --sanal: #38c2b1;
+    --ogreniyorum: #a98bff;
+    --ubys: #77a0ff;
+    --shadow-tint: rgb(0 0 0 / 0.6);
+    --dot: rgb(255 255 255 / 0.06);
+    color-scheme: dark;
+  }
+}
+
+/* Tema değişimi: View Transitions ile tıklanan noktadan yayılan dairesel geçiş (lib/theme.js) */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+::view-transition-old(root) {
+  z-index: 1;
+}
+::view-transition-new(root) {
+  z-index: 2;
+}
+
+@layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+    text-size-adjust: 100%;
+  }
+  body {
+    @apply bg-paper font-sans text-ink antialiased;
+    /* Noktalı ızgara zemin (Koval SEO Console'daki gibi): sabit, çok hafif, etkileşimi etkilemez */
+    background-image: radial-gradient(var(--dot) 1px, transparent 1.25px);
+    background-size: 22px 22px;
+    background-attachment: fixed;
+    font-feature-settings: "cv11", "ss01"; /* Inter: düz "a", açık rakamlar */
+    min-height: 100dvh;
+    overflow-x: clip; /* güvenlik ağı: yatay taşma asla sayfayı genişletmesin (sticky ile uyumlu) */
+  }
+  #root {
+    position: relative;
+    z-index: 1;
+    isolation: isolate;
+  }
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 0.5rem;
+  }
+  em {
+    font-style: normal;
+  }
+  ::selection {
+    background: var(--accent-soft);
+    color: var(--ink);
+  }
+  button,
+  a,
+  [role="button"],
+  summary,
+  label[for],
+  select {
+    cursor: pointer;
+  }
+  button:disabled {
+    cursor: not-allowed;
+  }
+  input[type="search"]::-webkit-search-cancel-button {
+    appearance: none;
+  }
+}
+
+@layer components {
+  /* Başlıklar: aynı yazı tipi, sıkı harf aralığı (eski serif sınıfının adı korunur) */
+  .font-display {
+    font-family: var(--font-sans);
+    font-optical-sizing: auto;
+    letter-spacing: -0.022em;
+  }
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+  /* Küçük etiketler: mono, büyük harf, hafif aralıklı (ödüllü sitelerdeki "index" etiketleri gibi) */
+  .eyebrow {
+    @apply font-mono text-[0.6875rem] font-medium tracking-[0.08em] text-ink-3 uppercase;
+  }
+  /* Yuvarlak mono etiket: "/ teslimler" gibi konsol etiketleri */
+  .tag {
+    @apply inline-flex h-6 items-center gap-1 rounded-full border border-rule-strong px-2.5 font-mono text-[0.6875rem] leading-none tracking-[0.06em] text-ink-2 uppercase;
+  }
+  /* Ters renkli yuvarlak mono çip: bölüm ve sayfa numaraları */
+  .chip-ink {
+    @apply inline-flex h-6 items-center rounded-full bg-ink px-2.5 font-mono text-[0.6875rem] leading-none font-medium tracking-[0.08em] text-paper uppercase;
+  }
+  /* Satır üzerine gelince zemin soldan dolar (dizin listeleri) */
+  .row-sweep {
+    position: relative;
+    isolation: isolate;
+  }
+  .row-sweep::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    background: var(--wash);
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 0.55s var(--ease-out);
+  }
+  .row-sweep:hover::before,
+  .row-sweep:focus-visible::before {
+    transform: scaleX(1);
+  }
+  /* Noktalardan oluşan dev yazı (alt bilgideki marka) */
+  .dot-type {
+    background-image: radial-gradient(currentColor 38%, transparent 41%);
+    background-size: 0.09em 0.09em;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .rule-dotted {
+    background-image: radial-gradient(var(--rule-strong) 1px, transparent 1.2px);
+    background-size: 5px 2px;
+    background-repeat: repeat-x;
+    background-position: 0 50%;
+    height: 2px;
+  }
+  /* Metin bağlantısı: alt çizgi soldan büyür */
+  .link-line {
+    background: linear-gradient(currentColor, currentColor) 0 100% / 0% 1px no-repeat;
+    transition: background-size 0.45s var(--ease-out);
+  }
+  .link-line:hover {
+    background-size: 100% 1px;
+  }
+  .rule-dashed {
+    background-image: linear-gradient(to right, var(--rule-strong) 50%, transparent 50%);
+    background-size: 8px 1px;
+    background-repeat: repeat-x;
+  }
+  /* Yerel <dialog>: masaüstünde ortada kart, mobilde alttan çekmece */
+  dialog.sheet {
+    @apply m-0 max-h-[92dvh] w-full max-w-none border-0 bg-transparent p-0 text-ink;
+    inset: auto 0 0 0;
+  }
+  dialog.sheet::backdrop {
+    background: rgb(9 9 11 / 0.4);
+    backdrop-filter: blur(2px);
+  }
+  @media (min-width: 640px) {
+    dialog.sheet {
+      inset: 0;
+      margin: auto;
+      max-width: 34rem;
+      height: fit-content;
+    }
+  }
+}
+
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* Küçük görünen kontrollerde dokunma alanını ≥ 44px'e büyütür (görsel boyut değişmez) */
+@utility hit-area {
+  position: relative;
+  &::after {
+    content: "";
+    position: absolute;
+    inset: -0.625rem;
+  }
+}
+
+@utility pb-safe {
+  padding-bottom: max(env(safe-area-inset-bottom), 0.5rem);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Sayfa geçiş perdesi (components/motion.jsx PageCurtain). Ekranı kaplama anı (%40) App'teki PAGE_COVER_MS ile eşleşir. */
+@keyframes page-curtain {
+  0% {
+    clip-path: inset(100% 0 0 0 round 2rem 2rem 0 0);
+  }
+  40%,
+  52% {
+    clip-path: inset(0 0 0 0 round 0);
+  }
+  100% {
+    clip-path: inset(0 0 100% 0 round 0 0 2rem 2rem);
+  }
+}
+@keyframes page-curtain-text {
+  0% {
+    transform: translateY(105%);
+  }
+  42%,
+  56% {
+    transform: translateY(0);
+  }
+  95%,
+  100% {
+    transform: translateY(-105%);
+  }
+}
+.page-curtain {
+  animation: page-curtain 0.82s cubic-bezier(0.65, 0, 0.35, 1) both;
+}
+.page-curtain-text {
+  animation: page-curtain-text 0.82s cubic-bezier(0.23, 1, 0.32, 1) both;
+}
+
+@keyframes pulse-ring {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in oklab, currentColor 45%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 7px transparent;
+  }
+}
+.live-dot {
+  animation: pulse-ring 1.8s var(--ease-soft) infinite;
+}
+@keyframes spin-slow {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.spin {
+  animation: spin-slow 0.9s linear infinite;
+}

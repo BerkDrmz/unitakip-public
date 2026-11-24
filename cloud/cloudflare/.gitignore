@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.wrangler/
+.dev.vars*
+*.secrets.json
+
+output/
+.playwright/
+.playwright-cli/

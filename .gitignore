@@ -1,0 +1,43 @@
+# Gizli bilgiler ve kişisel veriler — ASLA commit etme
+.env
+.env.*
+!.env.example
+.dev.vars
+.dev.vars.*
+.clasprc.json
+.clasp.json
+data/
+secrets/
+*.enc
+client_secret*.json
+token*.json
+config/config.yaml
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+dist/
+build/
+
+# macOS
+.DS_Store
+._*
+
+# Yerel geliştirme araçları
+.serena/
+.wrangler/
+
+# Keşiften üretilen sayfa listeleri kişisel URL içerebilir
+config/*.pages.yaml
+# Panelde eklenen sitelerin yerel tanımları (refresh-session.py yazar)
+config/sites.local.yaml
+config/*.local.yaml
+
+# Kişisel kurulumda üretilen takip ve inceleme raporları
+docs/kesif/*oturumlu*.md
+security_best_practices_report.md

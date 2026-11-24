@@ -1,0 +1,16 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "unitakip-classroom-connect",
+  "main": "src/classroom-broker-worker.js",
+  "compatibility_date": "2026-11-01",
+  "workers_dev": true,
+  "preview_urls": false,
+  "observability": { "enabled": false },
+  "vars": {
+    "BROKER_ORIGIN": "https://unitakip-classroom-connect.unitakip-cloudflare.workers.dev",
+    "BROKER_MODE": "disabled"
+  },
+  "durable_objects": { "bindings": [{ "name": "FLOW", "class_name": "ClassroomFlow" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["ClassroomFlow"] }],
+  "ratelimits": [{ "name": "FLOW_LIMIT", "namespace_id": "582464201", "simple": { "limit": 12, "period": 60 } }]
+}

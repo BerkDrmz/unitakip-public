@@ -1,0 +1,17 @@
+{
+  "name": "unitakip-apps-script",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "cheerio": "1.2.0",
+    "crypto-js": "4.2.0",
+    "uri-js": "4.4.1"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2"
+  }
+}

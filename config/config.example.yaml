@@ -1,0 +1,152 @@
+# UniTakip yapılandırması. `unitakip init` bu dosyayı config/config.yaml olarak kopyalar.
+# Gizli bilgiler (anahtar, token, parola) BURAYA YAZILMAZ: .env ve data/secrets/ kullanılır.
+#
+# Siteler: kendi üniversitenin sitelerini `platforms:` altına ekle (aşağıdaki genel örneklere bak)
+# veya Cloudflare panelinden ekle. Panelde eklenen ve giriş isteyen siteler için
+# `python3 cloud/cloudflare/refresh-session.py <site-id> ...` komutu tanımı Git dışındaki
+# config/sites.local.yaml dosyasına yazar; bu dosyayı elle düzenlemen gerekmez.
+#
+# Bartın Üniversitesi için hazır şablonlar (sanal, ogreniyorum, ubys) aşağıda KAPALI gelir.
+# Kullanıyorsan `enabled: true` yap; kullanmıyorsan silebilir veya kapalı bırakabilirsin.
+
+timezone: Europe/Istanbul
+data_dir: data                 # göreli yol: proje köküne göre
+check_interval_minutes: 60     # her platform saatte bir
+jitter_minutes: 4              # istekleri tam saat başına yığmamak için ± rastgele kaydırma
+tick_seconds: 30
+run_timeout_minutes: 25        # bir kontrol takılırsa süreç kendini yeniden başlatır (Docker yeniden kaldırır)
+backup_keep_days: 7            # günlük veritabanı yedeği: data/backups/
+
+http:
+  min_request_interval_seconds: 1.5   # aynı sunucuya iki istek arası en az süre
+  timeout_seconds: 30
+  max_retries: 3
+  max_response_mb: 60
+
+platforms:
+  # --- Genel örnek: Moodle tabanlı ders sitesi (adresi kendi üniversitenle değiştir) ---
+  # ders:
+  #   enabled: true
+  #   type: moodle
+  #   display_name: "Uzaktan Eğitim"
+  #   base_url: https://lms.ornek-universite.edu.tr
+  #   auth_mode: token            # resmi mobil uygulama yöntemi: `unitakip login ders`
+  #   ws_service: moodle_mobile_app
+  #
+  # --- Genel örnek: herkese açık veya giriş isteyen web sayfası ---
+  # duyurular:
+  #   enabled: true
+  #   type: webpages
+  #   display_name: "Bölüm Duyuruları"
+  #   base_url: https://muhendislik.ornek-universite.edu.tr/
+  #   renderer: http
+  #   logged_out_markers: []      # giriş sayfasında görünen bir işaret (ör. 'name="password"')
+  #   pages:
+  #     - id: duyurular
+  #       url: https://muhendislik.ornek-universite.edu.tr/duyurular
+  #       kind: page              # page | announcement | grade | event | assignment | course_materials
+
+  # --- Bartın Üniversitesi hazır şablonu (isteğe bağlı) ---
+  sanal:
+    enabled: false
+    type: moodle
+    display_name: "Sanal Öğrenme"
+    base_url: https://sanalogrenme.bartin.edu.tr
+    # token: resmi mobil uygulama yöntemi (önerilen, keşifte doğrulandı: typeoflogin=1)
+    # session: tarayıcı oturumu + AJAX (yedek)
+    auth_mode: token
+    ws_service: moodle_mobile_app
+    course_classification: inprogress   # inprogress | all
+    include_course_ids: []               # boş = hepsi
+    exclude_course_ids: []
+    features:
+      contents: true        # bölümler, etkinlikler, dosyalar
+      files: true
+      announcements: true   # "Duyurular" forumu
+      forums: false         # diğer forumlar (gürültülü olabilir)
+      assignments: true
+      quizzes: true
+      calendar: true
+      grades: true
+      notifications: false  # Moodle'ın kendi bildirimleri (tekrar üretebilir)
+    calendar_days_ahead: 90
+    discussions_per_forum: 15
+    download_files: true
+    download_existing_files: false   # true: ilk taramada mevcut tüm materyaller de arşivlenir (bildirimsiz)
+    max_file_mb: 50
+    file_extensions: [pdf, ppt, pptx, doc, docx, xls, xlsx, odt, odp, ods, txt, rtf, zip, rar, 7z, png, jpg, jpeg, mp3, mp4]
+    notify_removed: false
+
+  ogreniyorum:
+    enabled: false
+    type: webpages
+    display_name: "Öğreniyorum.net"
+    base_url: https://ogreniyorum.net/mooc/
+    login_url: https://ogreniyorum.net/mooc/index.php?do=derskayitol
+    renderer: http
+    # Herkese açık giriş sayfasında doğrulanan işaret: bu metin görünüyorsa oturum düşmüştür
+    logged_out_markers: ['name="sifre"']
+    session_check_url: https://ogreniyorum.net/mooc/index.php?do=derskayitol
+    auto_relogin: false     # yalnızca `unitakip login ogreniyorum --remember-credentials` ile
+    login_form:             # herkese açık giriş formunda doğrulanan alan adları
+      kullaniciadi: "{username}"
+      sifre: "{password}"
+      remember: "on"
+    keepalive_minutes: 0
+    pages_include: config/ogreniyorum.pages.yaml
+    # İzlenecek sayfalar: `unitakip discover ogreniyorum --apply` önerileri buraya yazar.
+    pages:
+      - id: derskayitol
+        url: https://ogreniyorum.net/mooc/index.php?do=derskayitol
+        kind: page
+    download_files: true
+    max_file_mb: 50
+    file_extensions: [pdf, ppt, pptx, doc, docx, xls, xlsx, zip, rar, txt, mp4]
+    notify_removed: false
+
+  ubys:
+    enabled: false
+    type: webpages
+    display_name: "ÜBYS"
+    base_url: https://ubys.bartin.edu.tr/
+    login_url: https://ubys.bartin.edu.tr/
+    renderer: browser       # AJAX ağırlıklı arayüz → Playwright headless
+    # Herkese açık giriş sayfasında doğrulanan işaretler
+    logged_out_markers: ['id="loginForm"', 'data-ajax-url="/Account/Login"']
+    session_check_url: https://ubys.bartin.edu.tr/
+    auto_relogin: false     # SMS doğrulaması var: otomatik giriş YAPILMAZ
+    keepalive_minutes: 0    # keşiften sonra oturum süresine göre ayarla (ör. 15)
+    keepalive_url: null     # keşifte bulunacak hafif bir oturumlu uç nokta
+    pages: []
+    pages_include: config/ubys.pages.yaml   # `unitakip discover ubys --apply` yazar
+    download_files: true
+    max_file_mb: 30
+    file_extensions: [pdf, doc, docx, xls, xlsx]
+    notify_removed: false
+
+notify:
+  provider: gmail_api       # gmail_api | gmail_smtp (uygulama şifresi) | console (yalnızca .eml)
+  to: ""                    # boşsa UNITAKIP_NOTIFY_TO kullanılır
+  subject_prefix: "[UniTakip]"
+  attach_max_total_mb: 15   # base64 ile ~20,5 MB: Gmail'in 25 MB sınırına güvenli pay
+  drive_upload: false       # true: büyük dosyalar Drive'a (drive.file kapsamı) yüklenir
+  drive_folder_name: UniTakip
+  reauth_reminder_hours: 24
+  unreachable_after_failures: 6
+  notify_new_course: true
+  # Sessiz arıza koruması: bu özet düzenli gelmezse sistemde bir sorun var demektir
+  status_report: weekly     # weekly | daily | off
+  status_report_hour: 9     # yerel saat
+  status_report_weekday: 0  # 0 = Pazartesi
+  stale_after_hours: 24     # bu kadar süre başarılı kontrol olmazsa uyar
+  scope_failure_alert_runs: 24   # bir bölüm (ör. notlar) bu kadar kontroldür alınamıyorsa uyar
+
+ai:
+  provider: heuristic       # heuristic (ücretsiz, yerel) | ollama (yerel LLM) | anthropic (ÜCRETLİ)
+  allow_paid: false         # anthropic için AÇIK ONAY: true yapılmadan ücretli API çağrılmaz
+  max_input_chars: 12000
+  redact_personal_data: true
+  ollama_url: http://localhost:11434
+  ollama_model: qwen3:8b
+  anthropic_model: claude-opus-5-5   # daha ucuz seçenek: claude-haiku-5-5 (bkz. docs/05-ai-karsilastirma.md)
+  monthly_budget_usd: 2.0
