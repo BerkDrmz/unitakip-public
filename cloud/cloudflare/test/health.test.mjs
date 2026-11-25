@@ -43,7 +43,7 @@ test('quiet days: two daytime updates and one evening summary on Istanbul time',
       }
       assert.equal(change.item.title, 'Günlük özet · bugün yeni içerik yok');
       assert.equal(change.detectedAt, EVENING);
-      assert.match(change.item.body, /SON 24 SAATTE YENİ İÇERİK\nHiçbir sitede yeni ödev, dosya, duyuru, sınav ya da not çıkmadı/);
+      assert.match(change.item.body, /SON 24 SAATTE YENİ İÇERİK\nBaşarılı kontrollerde yeni ödev, dosya, duyuru, sınav ya da not tespit edilmedi/);
       assert.match(change.item.body, /SİTELERİN DURUMU\n1 sitenin hepsi hatasız okundu\./);
       assert.doesNotMatch(change.item.body, /Takip edilen kayıt|Kuyrukta/);
       assert.ok(!JSON.stringify(change).includes('MUST-NOT-LEAK'));
@@ -217,7 +217,20 @@ test('a fresh incident after recovery is sent immediately, continuous failure is
   assert.equal(Object.keys(state.pending).length, 1);
   assert.notEqual(Object.values(state.pending)[0].noticeKey, first);
   platformFailure(state, 'x', 'gate', now + HOUR + 4);
-  assert.equal(Object.keys(state.pending).length, 2);
+  assert.deepEqual(Object.values(state.pending).map((change) => change.item.title), ['Site anket veya onay ekranı gösteriyor']);
+});
+
+test('a deferred login warning is removed on recovery, without removing content or another site warning', async () => {
+  const state = stateAt();
+  state.platforms.other = { items: {}, lastSuccess: now };
+  platformFailure(state, 'x', 'auth', now);
+  await flushQueue(state, { save: async () => {}, quota: () => 1, send: async () => { throw new Error('SMTP offline'); } }, now);
+  queueNotice(state, 'content/x', 'x', 'İçerik özeti', '', now, { once: true });
+  platformFailure(state, 'other', 'auth', now);
+  platformRecovered(state, 'x', now + 1);
+  assert.deepEqual(Object.values(state.pending).map(({ platform, item }) => [platform, item.title]), [
+    ['x', 'İçerik özeti'], ['other', 'Yeniden giriş gerekiyor'],
+  ]);
 });
 
 test('a good session check cannot hide a failing content section', () => {
@@ -235,6 +248,24 @@ test('urgent incident precedes an older content backlog when delivery quota is l
   drop(state, 'x', now);
   await flushQueue(state, { save: async () => {}, quota: () => available ? 1 : 0, send: async (name) => { first = name; available = false; } }, now);
   assert.equal(first, 'x'); assert.ok(state.pending.old);
+});
+
+test('all due incidents go first and content mail advances across sites with a limited quota', async () => {
+  const state = stateAt();
+  state.platforms.other = { items: {}, lastSuccess: now };
+  for (let n = 0; n < 40; n++) {
+    const id = 'x-' + n;
+    state.pending[id] = { id, platform: 'x', type: 'new', item: { title: id }, nextAttempt: now, attempts: n === 0 ? 3 : 0 };
+  }
+  state.pending.other = { id: 'other', platform: 'other', type: 'new', item: { title: 'Other' }, nextAttempt: now, attempts: 0 };
+  drop(state, 'x', now);
+  drop(state, 'other', now);
+  const sent = [];
+  await flushQueue(state, { save: async () => {}, quota: () => 4 - sent.length, send: async (name, changes) => {
+    sent.push([name, changes.length, Boolean(changes[0].noticeKey)]);
+  } }, now);
+  assert.deepEqual(sent, [['x', 1, true], ['other', 1, true], ['x', 30, false], ['other', 1, false]]);
+  assert.ok(state.pending['x-0']);
 });
 
 test('Moodle token is checked between full scans and urgent warning is attempted before the next site', async () => {
@@ -287,4 +318,16 @@ test('the daily summary leads with the content of the day and the deadlines of t
   assert.doesNotMatch(change.item.body, /Dünkü dosya|Günlük özet \(/);
   assert.match(change.item.body, /ÖNÜMÜZDEKİ 7 GÜNDE SON TARİHİ OLANLAR\n• .* · Okul · Algoritmalar — Lab 5\n\nSİTELERİN/);
   assert.doesNotMatch(change.item.body, /Lab 5 teslim tarihi|Proje|Silinen sınav/);
+});
+
+test('the daily summary includes detected content still waiting for email', () => {
+  const state = stateAt(EVENING - HOUR);
+  state.pending.grade = { id: 'grade', platform: 'x', type: 'updated', item: { title: 'Vize', course: 'Web' },
+    detectedAt: EVENING - 60000, nextAttempt: EVENING + 60000, attempts: 1 };
+  queueStatusReport(state, config, EVENING);
+  const report = pendingReports(state)[0];
+  assert.equal(report.item.title, 'Günlük özet · 1 yeni içerik/değişiklik');
+  assert.match(report.item.body, /Okul · Web — Vize \(güncellendi, e-posta bekliyor\)/);
+  assert.match(report.item.body, /1 içerik bildirimi gönderim kuyruğunda/);
+  assert.ok(state.pending.grade);
 });

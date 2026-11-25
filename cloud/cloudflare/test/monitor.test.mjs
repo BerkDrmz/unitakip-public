@@ -97,6 +97,16 @@ test('baseline silent, changes stable, cycles A-B-A independently queued', () =>
   assert.deepEqual(Object.values(state.pending).map((change) => change.item.body), ['B', 'A']);
 });
 
+test('a partial scan retains the last successful full check and still records a valid change', () => {
+  const state = emptyState();
+  mergeSnapshot(state, 'x', snap([item('A')], ['p', 'q']), now);
+  mergeSnapshot(state, 'x', { items: [item('B')], complete: ['p'], errors: [{ scope: 'q', code: 'site' }] }, now + 1);
+  assert.equal(state.platforms.x.lastSuccess, now);
+  assert.equal(state.platforms.x.scopes.p, now + 1);
+  assert.equal(state.platforms.x.scopes.q, now);
+  assert.deepEqual(Object.values(state.pending).map((change) => change.item.body), ['B']);
+});
+
 test('partial sections and sudden content loss preserve previous data', () => {
   const state = emptyState();
   const items = Array.from({ length: 8 }, (_, n) => item(String(n), String(n)));
@@ -359,6 +369,7 @@ test('baseline isolates expired platform, then recovery is silent and later fail
   state.manualRequestedAt = Date.now(); state.intervalMinutes = 30;
   fail = false; await tick(config, store, accepted, { ...opts, scheduled: true });
   assert.equal(state.platforms.web.error, null); assert.equal(Object.keys(state.pending).length, 0);
+  assert.equal(Object.keys(state.notices).some((key) => key.startsWith('incident/web/')), false);
   assert.equal(Object.keys(state.platforms.web.items).length, 1); assert.equal(state.scheduledRuns, 1);
   assert.equal(state.manualRequestedAt, null); assert.equal(state.nextFullAt - state.lastFullAt, 30 * 60000);
   const previous = structuredClone(state.platforms.web.items);
@@ -372,7 +383,7 @@ test('baseline isolates expired platform, then recovery is silent and later fail
   state.platforms.web.healthIncident.since -= 600000;
   await tick(config, store, refused, { ...opts, force: true });
   // Aynı kesinti ikinci kez uyarı üretmez; gönderilemeyen ilk uyarı korunur.
-  assert.ok(Object.keys(state.notices).some((key) => key.startsWith('incident/web/')));
+  assert.equal(Object.keys(state.notices).some((key) => key.startsWith('incident/web/')), false);
   assert.equal(Object.values(state.pending).filter((change) => change.noticeKey?.startsWith('incident/web/')).length, 1);
 });
 

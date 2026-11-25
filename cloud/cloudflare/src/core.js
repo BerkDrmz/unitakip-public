@@ -750,11 +750,9 @@ export function mergeSnapshot(state, name, snapshot, now, options = {}) {
     snapshot.errors = snapshot.errors.filter((error) => error.scope !== scope);
     snapshot.errors.push({ scope, code: 'gate' });
   }
-  let merged = 0;
   for (const scope of snapshot.complete) {
     // Ara ekran gösteren sayfanın hiçbir bölümü (içerik listesi dahil) birleştirilmez.
     if (gated.has(scope) || gated.has(scope.replace(/^learning\//, ''))) continue;
-    merged++;
     // Ayrıştırıcı geçişi: aynı eski ödevler topluca "yeni" diye gönderilmez; boş liste de yeni biçimi başlatır.
     const format = snapshot.formats?.[scope];
     if (format && platform.formats?.[scope] !== format) {
@@ -836,7 +834,7 @@ export function mergeSnapshot(state, name, snapshot, now, options = {}) {
     platform.scopes[scope] = now;
   }
   if (!options.scoped) {
-    if (merged || !gated.size) platform.lastSuccess = now;
+    if (snapshot.complete.length && !snapshot.errors.length) platform.lastSuccess = now;
     platform.error = snapshot.errors.length ? (gated.size ? 'gate' : 'partial') : null;
     platform.partial = snapshot.errors;
   }
@@ -863,34 +861,49 @@ export function activityEntry(change, sentAt) {
     detectedAt: change.detectedAt, sentAt };
 }
 
-export async function flushQueue(state, io, now) {
-  const urgent = (change) => change.noticeKey?.startsWith('incident/') ? 1 : 0;
-  const due = Object.values(state.pending).filter((change) => change.nextAttempt <= now && (!io.urgentOnly || urgent(change)) &&
-    (!io.filter || io.filter(change))).sort((a, b) => urgent(b) - urgent(a));
-  const names = [...new Set(due.map((change) => change.platform))];
-  let sent = 0;
-  for (const name of names) {
-    const all = due.filter((change) => change.platform === name);
-    const groups = all.some((change) => change.attempts >= 3) ? all.map((change) => [change]) : Array.from({ length: Math.ceil(all.length / 30) }, (_, i) => all.slice(i * 30, i * 30 + 30));
-    for (const group of groups) {
-      if (io.quota() < 1) return sent;
-      // The pending batch is durable before attempting any external mail delivery.
-      await io.save(state);
-      try {
-        await io.send(name, group);
-      } catch {
-        for (const change of group) { change.attempts++; change.nextAttempt = now + retryDelay(change.attempts); }
-        await io.save(state);
-        continue;
-      }
-      for (const change of group) {
-        if (change.noticeKey) state.notices[change.noticeKey] = now;
-        addActivity(state, [activityEntry(change, now)]);
-        delete state.pending[change.id]; sent++;
-      }
-      // A crash between accepted delivery and this write may duplicate, never intentionally drops a queued batch.
-      await io.save(state);
+function* mailBatches(changes) {
+  const levels = [new Map(), new Map()];
+  for (const change of changes) {
+    const sites = levels[change.noticeKey?.startsWith('incident/') ? 0 : 1];
+    if (!sites.has(change.platform)) sites.set(change.platform, []);
+    sites.get(change.platform).push(change);
+  }
+  for (const sites of levels) {
+    const batches = [...sites].map(([site, records]) => {
+      const ordinary = records.filter((record) => !(record.attempts >= 3));
+      const groups = Array.from({ length: Math.ceil(ordinary.length / 30) }, (_, index) => ordinary.slice(index * 30, index * 30 + 30));
+      groups.push(...records.filter((record) => record.attempts >= 3).map((record) => [record]));
+      return { site, groups };
+    });
+    const totalRounds = Math.max(0, ...batches.map(({ groups }) => groups.length));
+    for (let index = 0; index < totalRounds; index++) {
+      for (const { site, groups } of batches) if (groups[index]) yield [site, groups[index]];
     }
+  }
+}
+
+export async function flushQueue(state, io, now) {
+  const due = Object.values(state.pending).filter((change) => change.nextAttempt <= now &&
+    (!io.urgentOnly || change.noticeKey?.startsWith('incident/')) && (!io.filter || io.filter(change)));
+  let sent = 0;
+  for (const [name, group] of mailBatches(due)) {
+    if (io.quota() < 1) return sent;
+    // The pending batch is durable before attempting any external mail delivery.
+    await io.save(state);
+    try {
+      await io.send(name, group);
+    } catch {
+      for (const change of group) { change.attempts = (change.attempts || 0) + 1; change.nextAttempt = now + retryDelay(change.attempts); }
+      await io.save(state);
+      continue;
+    }
+    for (const change of group) {
+      if (change.noticeKey) state.notices[change.noticeKey] = now;
+      delete state.pending[change.id]; sent++;
+    }
+    addActivity(state, group.map((change) => activityEntry(change, now)));
+    // A crash between accepted delivery and this write may duplicate, never intentionally drops a queued batch.
+    await io.save(state);
   }
   return sent;
 }

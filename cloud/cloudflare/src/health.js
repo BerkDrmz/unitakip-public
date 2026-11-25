@@ -29,6 +29,12 @@ function logConnection(state, site, code, now) {
 }
 const FAILURES = new Set([...Object.values(reasons), 'Kontrol hatası']);
 
+function discardPendingIncident(state, name) {
+  for (const [id, change] of Object.entries(state.pending)) {
+    if (change.platform === name && change.noticeKey?.startsWith('incident/')) delete state.pending[id];
+  }
+}
+
 /**
  * A recovered site starts a new incident even if it fails again on the same day.
  * Erişim, giriş ve okuma hataları ilk tespitte bildirilir. Aynı kesinti sürdükçe yinelenmez.
@@ -37,6 +43,7 @@ export function platformFailure(state, name, code, now) {
   const record = state.platforms[name];
   const safeCode = Object.hasOwn(reasons, code) ? code : 'site';
   if (!record.healthIncident || record.healthIncident.code !== safeCode) {
+    discardPendingIncident(state, name);
     // Hata türü değişse de kesinti aynı kesintidir: başlangıç zamanı korunur.
     record.healthIncident = { code: safeCode, key: `incident/${name}/${++state.sequence}`, startedAt: record.healthIncident?.startedAt ?? now, since: now, announced: false };
     logConnection(state, name, safeCode, now);
@@ -70,6 +77,7 @@ export function platformRecovered(state, name, now, { full = false } = {}) {
   record.lastConnectivityAt = now;
   // A session check cannot prove that a previously failing content section recovered.
   if (full || ['auth', 'network'].includes(record.healthIncident?.code)) {
+    discardPendingIncident(state, name);
     if (record.healthIncident) logConnection(state, name, 'ok', now);
     record.healthIncident = null;
     record.error = null;
@@ -137,8 +145,13 @@ export function queueStatusReport(state, config, now) {
     return;
   }
   const names = Object.fromEntries(sites.map((site) => [site.id, site.name]));
-  // Özetin asıl konusu içerik: son 24 saatte bildirilen yeni/değişen kayıtlar ve yaklaşan teslimler.
-  const changed = (state.activity || []).filter((entry) => entry.sentAt > now - 86400000 && Object.hasOwn(CHANGE_LABELS, entry.type));
+  const isContent = (entry) => Object.hasOwn(CHANGE_LABELS, entry.type);
+  const recent = (entry) => (entry.detectedAt ?? entry.sentAt) > now - 86400000;
+  const waiting = Object.values(state.pending).filter(isContent);
+  const changed = [
+    ...(state.activity || []).filter((entry) => isContent(entry) && recent(entry)),
+    ...waiting.filter(recent).map(({ platform, type, item }) => ({ platform, type, course: item.course, title: item.title, waiting: true })),
+  ];
   const due = [];
   for (const site of sites) if (!site.paused) for (const record of Object.values(state.platforms[site.id]?.items || {})) {
     const item = record?.item;
@@ -157,16 +170,17 @@ export function queueStatusReport(state, config, now) {
     `Özet: ${date(now)} (İstanbul).\n\n` +
     'SON 24 SAATTE YENİ İÇERİK\n' +
     (changed.length
-      ? `${changed.slice(0, 15).map((change) => `• ${entry(names[change.platform] || change.platform, change)} (${CHANGE_LABELS[change.type]})`).join('\n')}` +
-        `${changed.length > 15 ? `\n… ve ${changed.length - 15} kayıt daha` : ''}\nHer birinin ayrıntısı tespit edildiği anda ayrı e-postayla gönderildi.`
-      : 'Hiçbir sitede yeni ödev, dosya, duyuru, sınav ya da not çıkmadı. Siteler saatte bir baştan okundu' +
-        `${state.lastFullAt ? `; son tam kontrol ${date(state.lastFullAt)}` : ''}.`) +
+      ? `${changed.slice(0, 15).map((change) => `• ${entry(names[change.platform] || change.platform, change)} (${CHANGE_LABELS[change.type]}${change.waiting ? ', e-posta bekliyor' : ''})`).join('\n')}` +
+        `${changed.length > 15 ? `\n… ve ${changed.length - 15} kayıt daha` : ''}`
+      : 'Başarılı kontrollerde yeni ödev, dosya, duyuru, sınav ya da not tespit edilmedi.' +
+        `${state.lastFullAt ? ` Son tam kontrol ${date(state.lastFullAt)}.` : ''}`) +
+    (waiting.length ? `\n${waiting.length} içerik bildirimi gönderim kuyruğunda.` : '') +
     '\n\nÖNÜMÜZDEKİ 7 GÜNDE SON TARİHİ OLANLAR\n' +
     (upcoming.length ? upcoming.slice(0, 10).map(({ site, item }) => `• ${date(item.dueAt)} · ${entry(site, item)}`).join('\n') + (upcoming.length > 10 ? `\n… ve ${upcoming.length - 10} kayıt daha` : '')
       : 'Takip edilen sitelerde önümüzdeki 7 gün içinde son tarihi olan ödev ya da sınav yok.') +
     '\n\nSİTELERİN DURUMU\n' +
     (healthy ? `${sites.length} sitenin hepsi hatasız okundu.`
       : `${troubled ? `${troubled} sitede sorun var.` : unconfirmed ? `${unconfirmed} sitede kontrol sorunu yeniden doğrulanıyor.` : 'Bazı sitelerin kontrolü güncel değil.'}\n\n${lines()}`) +
-    `\n\nBu özet her akşam ${DAILY_SUMMARY_HOUR}:00'den sonra bir kez gelir. Yeni içerik ya da bağlantı sorunu çıktığında ayrıca hemen e-posta alırsın.`, now);
+    `\n\nBu özet her akşam ${DAILY_SUMMARY_HOUR}:00'den sonra bir kez gelir. UniTakip, yeni içerik ve bağlantı sorunları için ayrıca e-posta gönderir.`, now);
   state.lastDailySummary = day;
 }

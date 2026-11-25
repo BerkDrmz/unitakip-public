@@ -192,10 +192,14 @@ Eski `finish-learning-login.py` aynı komutu `ogreniyorum` için çağırır.
   Python sürümünden taşınmadı. Bugünkü yapılandırılmış sayfalar HTTP ile okunabiliyor.
 - Kuyruk gönderim öncesinde kalıcıdır ve başarısız denemeler sayıları yüzünden silinmez.
   Kabul edilmiş bir e-postanın hemen ardından süreç kesilirse tekrar gönderim olabilir.
+  Bağlantı uyarıları önce işlenir. İçerik bildirimleri siteler arasında sıra ile gönderilir.
+  Bir sorun düzelirse o site için henüz gönderilmemiş eski bağlantı uyarıları kuyruktan çıkarılır.
 - İstanbul saatiyle 09.00 ve 15.00 sonrasındaki ilk olağan kontrolde kısa durum e-postası gelir.
   Her site için son başarılı tam kontrol saati gösterilir. Kaçırılan eski saatler topluca gönderilmez.
   21.00 sonrasında günlük özet gelir. Daha önce bildirilen erişim sorunu düzelirse ayrıca durum
   raporu gönderilir. Başarısız gönderimler kalıcı kuyrukta yeniden denenir.
+  Günlük özet, e-posta kuyruğunda bekleyen içerik değişikliklerini de belirtir. Eksik bir site taraması
+  okunabilen bölümlerdeki değişiklikleri işler ve **son başarılı tam kontrol** saatini korur.
 - Erişim, giriş, okuma ve anket/onay ekranı hataları ilk tespit edilen kontrolde, diğer sitelerin
   taraması bitmeden gönderilmeye çalışılır. Aynı kesinti sürdükçe uyarı yinelenmez; düzelip yeniden
   bozulursa yeni olay olarak bildirilir. Giriş sayfasıyla gelen anonim çerezler saklı oturumun üzerine

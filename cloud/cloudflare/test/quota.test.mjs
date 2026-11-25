@@ -167,7 +167,7 @@ test('a rejected web session is confirmed with the stored cookie and can recover
   await tick(config, store, noMail, options);
   assert.deepEqual(sent, ['sid=good', 'sid=good', 'sid=good']);
   assert.equal(current.platforms.web.error, null);
-  assert.equal(Object.values(current.pending).filter((change) => change.noticeKey?.startsWith('incident/')).length, 1);
+  assert.equal(Object.values(current.pending).filter((change) => change.noticeKey?.startsWith('incident/')).length, 0);
   assert.deepEqual(current.connectionLog.map((entry) => entry.code), ['auth', 'ok']);
 });
 

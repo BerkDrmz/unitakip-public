@@ -275,7 +275,7 @@ export async function keepUbysSession(config, store, options = {}) {
       }
     } else await checkWebSession(platform, client);
     remember(state, 'ubys', client);
-    state.platforms.ubys.lastConnectivityAt = now;
+    platformRecovered(state, 'ubys', now);
   } catch (error) {
     if (!(error instanceof MonitorError)) throw error;
     // Hatalı yanıt oturumu değiştirmez. Olağan kontrol hatayı doğrulayıp uyarıları yönetir.
