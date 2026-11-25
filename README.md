@@ -197,6 +197,8 @@ UniTakip’i kurduğun bilgisayarda terminali `README.md` ve `cloud` klasörün�
 .venv/bin/python cloud/cloudflare/refresh-session.py ubys
 ```
 
+Komut `Executable doesn't exist` veya `Chromium kurulu değil` hatası verirse aynı proje klasöründe `.venv/bin/python -m playwright install chromium` çalıştır. Kurulum bitince ÜBYS komutunu yeniden dene.
+
 ÜBYS’yi farklı bir adrese veya ayrı bir site kaydına eklediysen **Siteler → ilgili site → Panelden yeniden bağlan** bölümündeki **Kopyala** düğmesini kullan. Kartta `--type` ve `--url` varsa bu seçenekleri komutla birlikte kopyala.
 
 1. Açılan ÜBYS sayfasında **e-Devlet ile Giriş**’i seç. T.C. kimlik numaranı ve e-Devlet şifreni yalnızca resmî `giris.turkiye.gov.tr` ekranına gir. ÜBYS’ye döndüğünde giriş otomatik algılanmazsa terminalde **Enter**’a bas.
