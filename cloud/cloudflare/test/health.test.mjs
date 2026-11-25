@@ -5,6 +5,7 @@ import { queueStatusReport, platformFailure, platformRecovered, reportStatus, ST
 
 const HOUR = 3600000;
 import { tick } from '../src/runtime.js';
+import { setPaused } from '../src/sites.js';
 
 const now = Date.parse('2026-11-10T01:00:00Z');
 const config = { platforms: { x: { display_name: 'Okul', token: 'TOKEN-MUST-NOT-LEAK', cookies: [{ value: 'COOKIE-MUST-NOT-LEAK' }] } } };
@@ -251,6 +252,28 @@ test('a good session check cannot hide a failing content section', () => {
   assert.equal(state.platforms.x.error, 'partial');
   platformRecovered(state, 'x', now + 2, { full: true });
   assert.equal(state.platforms.x.error, null);
+});
+
+test('pausing one site holds its pending mail across retries and resume delivers it once', async () => {
+  const state = stateAt();
+  state.sites = [{ id: 'x' }, { id: 'other' }, { id: 'system', paused: true }];
+  state.pending.task = { id: 'task', platform: 'x', type: 'new', item: { title: 'Ödev' }, nextAttempt: now, attempts: 0 };
+  platformFailure(state, 'x', 'auth', now);
+  await flushQueue(state, { save: async () => {}, quota: () => 1, send: async () => { throw Error('offline'); } }, now);
+  const held = structuredClone(state.pending);
+  setPaused(state, 'x', true, now);
+  queueNotice(state, 'content/other', 'other', 'Yeni içerik', '', now);
+  queueNotice(state, 'status/test', 'system', 'Durum raporu', '', now);
+  const sent = [];
+  const drain = (urgentOnly = false) => flushQueue(state, { urgentOnly, save: async () => {}, quota: () => 1,
+    send: async (_, changes) => sent.push(...changes.map(change => change.id)) }, now + HOUR);
+  assert.equal(await drain(true), 0);
+  assert.equal(await drain(), 2);
+  assert.deepEqual(state.pending, held);
+  setPaused(state, 'x', false, now + HOUR);
+  assert.equal(await drain(), 2);
+  assert.equal(await drain(), 0);
+  assert.equal(new Set(sent).size, 4);
 });
 
 test('urgent incident precedes an older content backlog when delivery quota is limited', async () => {

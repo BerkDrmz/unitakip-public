@@ -888,7 +888,9 @@ function* mailBatches(changes) {
 }
 
 export async function flushQueue(state, io, now) {
+  const paused = new Set((state.sites || []).filter(site => site.paused).map(site => site.id));
   const due = Object.values(state.pending).filter((change) => change.nextAttempt <= now &&
+    (!paused.has(change.platform) || (change.platform === 'system' && change.noticeKey?.startsWith('status/'))) &&
     (!io.urgentOnly || change.noticeKey?.startsWith('incident/')) && (!io.filter || io.filter(change)));
   let sent = 0;
   for (const [name, group] of mailBatches(due)) {
