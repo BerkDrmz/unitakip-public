@@ -108,7 +108,7 @@ export async function exchangeClassroomCode(oauth, pending, code, options) {
   return { clientId: oauth.id, account: profile.sub, refreshToken: result.refresh_token };
 }
 
-async function pages(path, field, params, accessToken, options) {
+async function pages(path, field, params, read) {
   const url = new URL(path, API_URL);
   const entries = [], visited = new Set();
   let next;
@@ -117,7 +117,7 @@ async function pages(path, field, params, accessToken, options) {
       if (visited.has(next)) throw new MonitorError('site', 'Classroom sayfalaması tekrarlanıyor.');
       visited.add(next); url.searchParams.set('pageToken', next);
     } else url.search = new URLSearchParams({ pageSize: '100', ...params });
-    const data = await classroomJSON(url.href, { headers: { Authorization: `Bearer ${accessToken}` } }, options);
+    const data = await read(url.href);
     if (data[field] !== undefined && !Array.isArray(data[field])) throw new MonitorError('site', 'Classroom liste biçimi tanınmadı.');
     entries.push(...(data[field] || []));
     next = typeof data.nextPageToken === 'string' ? data.nextPageToken : '';
@@ -152,12 +152,25 @@ export function classroomItem(course, kind, scope, entry) {
 
 export async function classroomSnapshot(platform, options) {
   const { oauth, connection } = platform;
-  const credentials = await token(oauth, { grant_type: 'refresh_token', refresh_token: connection.refreshToken }, options);
-  const access = credentials.access_token;
-  if (!access) throw new MonitorError('auth', 'Google bağlantısını yeniden kur.');
-  if (typeof credentials.refresh_token === 'string' && credentials.refresh_token) connection.refreshToken = credentials.refresh_token;
+  const refresh = async () => {
+    const credentials = await token(oauth, { grant_type: 'refresh_token', refresh_token: connection.refreshToken }, options);
+    if (!credentials.access_token) throw new MonitorError('auth', 'Google bağlantısını yeniden kur.');
+    if (typeof credentials.refresh_token === 'string' && credentials.refresh_token) connection.refreshToken = credentials.refresh_token;
+    return credentials.access_token;
+  };
+  let access = await refresh(), retried = false;
+  const read = async (url) => {
+    const request = () => classroomJSON(url, { headers: { Authorization: `Bearer ${access}` } }, options);
+    try { return await request(); }
+    catch (error) {
+      if (error.code !== 'auth' || retried) throw error;
+      retried = true;
+      access = await refresh();
+      return request();
+    }
+  };
   const courses = await pages('courses', 'courses', { studentId: 'me', courseStates: 'ACTIVE',
-    fields: 'nextPageToken,courses(id,name,alternateLink)' }, access, options);
+    fields: 'nextPageToken,courses(id,name,alternateLink)' }, read);
   const items = [], complete = ['classroom/courses'], errors = [];
   for (const course of courses) {
     if (!course.id || !course.name) continue;
@@ -168,7 +181,7 @@ export async function classroomSnapshot(platform, options) {
     ]) {
       const scope = `classroom/${course.id}/${resource}`;
       try {
-        const entries = await pages(`${route}/${resource}`, resource, { [stateParam]: 'PUBLISHED', fields: `nextPageToken,${resource}(${fields})` }, access, options);
+        const entries = await pages(`${route}/${resource}`, resource, { [stateParam]: 'PUBLISHED', fields: `nextPageToken,${resource}(${fields})` }, read);
         for (const entry of entries) {
           if (entry.id) items.push(classroomItem(course, kind, scope, entry));
         }

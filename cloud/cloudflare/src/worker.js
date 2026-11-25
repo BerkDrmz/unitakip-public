@@ -361,7 +361,14 @@ export class Monitor {
       const payload = await readJSON(request, CLASSROOM_SCRIPT_LIMIT);
       const snapshot = readClassroomScriptSnapshot(payload, now);
       const result = importClassroomScriptSnapshot(state, site, bridge, snapshot, now);
-      if (!result.duplicate) await store.save(state);
+      if (!result.duplicate) {
+        await store.save(state);
+        if (Object.values(state.pending).some((change) => change.platform === id && change.nextAttempt <= now)) {
+          const soon = now + 1000;
+          const alarm = await this.ctx.storage.getAlarm();
+          if (alarm === null || alarm > soon) await this.ctx.storage.setAlarm(soon);
+        }
+      }
       return json(result);
     } catch (error) {
       if (error instanceof AuthError || error.code === 'bad_request') return json({ error: 'bad_request' }, error.status || 400);
@@ -501,10 +508,10 @@ export class Monitor {
         return json(result);
       }
       if (this.env.LIVE_ENABLED !== 'true') return json({ disabled: true }, 409);
-      if (path === '/ubys-keepalive') { await keepUbysSession(config, store); return json({ ok: true }); }
-      const { manualPending, ...result } = await tick(config, store, connect, { panelURL: this.env.PANEL_URL, force: path === '/run', scheduled: path === '/tick' ? (new URL(request.url).searchParams.get('source') === 'alarm' ? 'alarm' : 'cron') : false, onProgress: (value) => { this.checkProgress = value; } });
-      // Elle başlatılan tam kontrol tek çalışmaya sığmadıysa birkaç saniye sonra kaldığı yerden sürer.
-      if (manualPending) await this.ctx.storage.setAlarm(Date.now() + 3000);
+      if (path === '/ubys-keepalive') { await keepUbysSession(config, store, { connect }); return json({ ok: true }); }
+      const { manualPending, fastPending, ...result } = await tick(config, store, connect, { panelURL: this.env.PANEL_URL, force: path === '/run', scheduled: path === '/tick' ? (new URL(request.url).searchParams.get('source') === 'alarm' ? 'alarm' : 'cron') : false, onProgress: (value) => { this.checkProgress = value; } });
+      // Hızlı veya elle başlatılan tur kotaya sığmadıysa birkaç saniye sonra kaldığı yerden sürer.
+      if (manualPending || fastPending) await this.ctx.storage.setAlarm(Date.now() + 3000);
       return json(result);
     } catch (error) {
       // Never return upstream error bodies, URLs, cookies, email addresses or stack traces.

@@ -63,6 +63,38 @@ function clientFor(platform, old, deadline, options) {
   const revision = hash({ token: platform.token || '', cookies: platform.cookies || [] });
   const client = new SiteClient({ ...platform, cookies: old?.credentialRevision === revision ? old.cookies : platform.cookies }, { ...options, deadline });
   client.revision = revision;
+  if (platform.type === 'webpages') {
+    const ubys = new URL(platform.base_url).origin === UBYS_ORIGIN && client.cookies.length;
+    // Limit recovery traffic to one verification per site visit.
+    let retried = false;
+    client.recoverPage = async (read, retryPage = true) => {
+      let trusted = structuredClone(client.cookies);
+      try { return await read(); }
+      catch (error) {
+        if (error.code !== 'auth') throw error;
+        client.cookies = trusted;
+        if (retried && !client.ubysSessionConfirmed) throw error;
+      }
+      if (!retried) {
+        retried = true;
+        if (ubys) {
+          try { await checkWebSession(platform, client, true); }
+          catch (error) { client.cookies = trusted; throw error; }
+          client.ubysSessionConfirmed = true;
+          if (!retryPage) return;
+          trusted = structuredClone(client.cookies);
+        }
+        try { return await read(); }
+        catch (error) {
+          if (error.code !== 'auth') throw error;
+          client.cookies = trusted;
+          if (!client.ubysSessionConfirmed) throw error;
+        }
+      }
+      throw new MonitorError('partial', 'ÜBYS oturumu açık ancak sayfa yeniden okunamadı.');
+    };
+  }
+  if (platform.type === 'moodle') client.allowTokenCheck = true;
   return client;
 }
 function remember(state, name, client) {
@@ -92,7 +124,8 @@ export async function probe(config, options = {}) {
 export function status(state, store = null) {
   return { ...reportStatus(state), usage: usageStatus(state, Date.now(), store?.usage?.() ?? null), armed: Boolean(state.armed), lastTick: state.lastTick || null, lastScheduledAt: state.lastScheduledAt || null, lastScheduledSource: state.lastScheduledSource || null, scheduledRuns: state.scheduledRuns || 0, pending: Object.keys(state.pending).length,
     files: Object.keys(state.archive).length, platforms: Object.fromEntries(Object.entries(state.platforms).map(([name, record]) => [name,
-      { lastSuccess: record.lastSuccess || null, error: record.error || null, items: Object.keys(record.items).length, partial: record.partial || [] }])) };
+      { lastSuccess: record.lastSuccess || null, error: record.error || null, items: Object.keys(record.items).length, partial: record.partial || [],
+        ...(record.lastGradeCheckAt ? { lastGradeCheckAt: record.lastGradeCheckAt } : {}) }])) };
 }
 
 export async function baseline(config, store, options = {}) {
@@ -198,13 +231,22 @@ const RETRY_MINUTES = 20;
 const MANUAL_CHAIN = 10 * 60 * 1000;
 /** Tam okunmayan çerezli bir sitenin oturum yoklaması için ayrılan dış istek (yoklama + olası bir yönlendirme). */
 const PING_COST = 2;
+const UBYS_ORIGIN = 'https://ubys.bartin.edu.tr';
 
-async function checkWebSession(platform, client) {
-  const response = await client.request(platform.session_check_url || platform.pages[0].url);
+async function checkWebSession(platform, client, forceProtected = false) {
+  const configuredCheck = platform.session_check_url;
+  const needsProtectedCheck = new URL(platform.base_url).origin === UBYS_ORIGIN &&
+    (forceProtected || !configuredCheck || new URL(configuredCheck, platform.base_url).href === `${UBYS_ORIGIN}/`);
+  // The public ÜBYS homepage can return 200 without a student session. This read-only endpoint requires it.
+  const protectedCheck = `${UBYS_ORIGIN}/conversation/GetMyNewMessagesCount`;
+  const response = await client.request(needsProtectedCheck ? protectedCheck : configuredCheck || platform.pages[0].url);
   assertLoggedIn(response.text, platform);
+  if (needsProtectedCheck && (response.url !== protectedCheck || !/^application\/json\b/i.test(response.headers.get('content-type') || ''))) {
+    throw new MonitorError('site', 'ÜBYS oturumu beklenen yanıtla doğrulanamadı.');
+  }
 }
 
-/** ÜBYS'nin iki olağan kontrol arasındaki oturum yoklaması. Okuma ve bildirimleri olağan kontrol yürütür. */
+/** ÜBYS notlarını olağan tam taramalar arasında kontrol eder. Not sayfası yoksa oturumu yoklar. */
 export async function keepUbysSession(config, store, options = {}) {
   const state = await store.load();
   const site = state.sites?.find(({ id, preset, paused }) => id === 'ubys' && preset === 'bartin-ubys' && !paused);
@@ -212,10 +254,26 @@ export async function keepUbysSession(config, store, options = {}) {
   const platform = effectiveSites({ ...state, sites: [site] }, config).active.ubys;
   if (!platform?.cookies?.length) return;
 
-  const now = Date.now(), budget = { used: 0, limit: PING_COST };
-  const client = clientFor(platform, state.platforms.ubys, now + 30000, { ...options, budget });
+  const record = state.platforms.ubys;
+  const now = Date.now();
+  const gradeGap = intervalMinutes(state) === 10 ? 9 : 4;
+  const readGrades = record?.lastSuccess && !state.manualRequestedAt && !state.fullRound &&
+    now - Math.max(record.lastSuccess, record.lastGradeCheckAt || 0) >= gradeGap * 60000 &&
+    platform.features?.grades !== false && platform.pages.some(({ kind }) => kind === 'grade');
+  const budget = { used: 0, limit: readGrades ? SUBREQUEST_BUDGET - PING_COST : PING_COST };
+  const client = clientFor(platform, record, now + (readGrades ? 90000 : 30000), { ...options, budget });
   try {
-    await checkWebSession(platform, client);
+    if (readGrades) {
+      const data = await webSnapshot({ ...platform, features: { ...platform.features, assignments: false } },
+        client, (page) => page.kind === 'grade', record.formats);
+      if (data.complete.length && !data.errors.length) {
+        mergeSnapshot(state, 'ubys', data, now, { scoped: true });
+        record.lastGradeCheckAt = now;
+      } else if (!client.ubysSessionConfirmed) {
+        budget.limit = SUBREQUEST_BUDGET;
+        await checkWebSession(platform, client);
+      }
+    } else await checkWebSession(platform, client);
     remember(state, 'ubys', client);
     state.platforms.ubys.lastConnectivityAt = now;
   } catch (error) {
@@ -224,6 +282,19 @@ export async function keepUbysSession(config, store, options = {}) {
   }
   recordUsage(state, now, { requests: budget.used });
   await store.save(state);
+  if (readGrades && options.connect) {
+    let sent = 0;
+    await flushQueue(state, {
+      save: (value) => store.save(value),
+      filter: (change) => change.platform === 'ubys' && change.item.kind === 'grade',
+      quota: () => sent < 2 && Date.now() < now + 60000 ? 1 : 0,
+      send: async (name, group) => {
+        sent++;
+        await sendGroup(options.connect, config, state, store, name, group);
+        recordUsage(state, now, { run: false, mails: 1 });
+      },
+    }, now);
+  }
 }
 
 export async function tick(config, store, connect, { force = false, scheduled = false, ...options } = {}) {
@@ -234,7 +305,11 @@ export async function tick(config, store, connect, { force = false, scheduled = 
   if (state.lastTick && now < state.lastTick - 300000) state.nextFullAt = now;
   // Yarım kalan tam tarama (süre veya dış istek payı doldu) en fazla iki saat boyunca kaldığı yerden sürdürülür.
   const resumed = state.fullRound && now - state.fullRound.startedAt < 7200000 && now >= state.fullRound.startedAt ? state.fullRound : null;
-  const full = force || Boolean(state.manualRequestedAt) || !state.nextFullAt || now >= state.nextFullAt || Boolean(resumed);
+  const interval = intervalMinutes(state);
+  // The main cron runs every ten minutes. Allow a faster arrival than the previous
+  // invocation by a few seconds without re-reading after a recent manual check.
+  const fastCron = scheduled === 'cron' && interval === 10 && now - (state.lastFullAt || 0) >= 5 * 60000;
+  const full = force || Boolean(state.manualRequestedAt) || !state.nextFullAt || now >= state.nextFullAt || Boolean(resumed) || fastCron;
   const manual = force || Boolean(state.manualRequestedAt);
   const round = { startedAt: resumed?.startedAt || now, done: [...(resumed?.done || [])] };
   const budget = { used: 0, limit: SUBREQUEST_BUDGET };
@@ -274,7 +349,9 @@ export async function tick(config, store, connect, { force = false, scheduled = 
           await store.save(state); await flush(true);
         } else platformRecovered(state, name, now, { full: true });
       } else if (platform.type !== 'moodle') {
-        await checkWebSession(platform, client);
+        const ping = () => checkWebSession(platform, client);
+        if (client.recoverPage) await client.recoverPage(ping, false);
+        else await ping();
         platformRecovered(state, name, now);
       } else {
         const info = await moodleCall(client, 'core_webservice_get_site_info');
@@ -340,7 +417,7 @@ export async function tick(config, store, connect, { force = false, scheduled = 
     // Okuma sorunu (anket ekranı, eksik bölüm, ulaşılamayan site) sürerken tam tarama sıklaşır: sorun giderildiğinde
     // panel ve e-posta bir saat beklemeden haberdar olur. Sahibinin çözmesi gereken kalıcı durumlarda sıklaşmaz.
     const troubled = entries.some(([name]) => RETRY_SOON.has(state.platforms[name]?.healthIncident?.code));
-    state.nextFullAt = now + Math.min(intervalMinutes(state), troubled ? RETRY_MINUTES : Infinity) * 60000;
+    state.nextFullAt = now + Math.min(interval, troubled ? RETRY_MINUTES : Infinity) * 60000;
     state.lastFullAt = now; state.manualRequestedAt = null; delete state.fullRound;
   }
   else if (full) state.fullRound = round;
@@ -350,8 +427,11 @@ export async function tick(config, store, connect, { force = false, scheduled = 
   recordUsage(state, now, { requests: budget.used, deferred });
   state.lastTick = now; await store.save(state);
   await flush();
-  // Elle başlatılan tam kontrol tek çalışmaya sığmadıysa 10 dakikalık zamanlayıcıyı beklemeden sürdürülür (en çok 10 dk boyunca).
-  return { ...status(state, store), manualPending: Boolean(state.manualRequestedAt && state.fullRound && now - state.manualRequestedAt < MANUAL_CHAIN) };
+  // Bütçeye sığmayan hızlı tur ilerleme kaydettiyse bir sonraki cron'u beklemeden devam eder.
+  const manualPending = Boolean(state.manualRequestedAt && state.fullRound && now - state.manualRequestedAt < MANUAL_CHAIN);
+  const fastPending = interval === 10 && Boolean(state.fullRound) && round.done.length > (resumed?.done.length || 0) &&
+    now - round.startedAt < MANUAL_CHAIN;
+  return { ...status(state, store), manualPending, fastPending };
 }
 
 /**

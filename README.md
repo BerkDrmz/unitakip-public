@@ -149,7 +149,7 @@ Cloudflare kurulumu bitince ve `"armed":true` görününce UniTakip proje klasö
 npm --prefix cloud/cloudflare run classroom:setup
 ```
 
-Tarayıcıda derslerini gördüğün Google hesabını seç. Google önce kurulum aracına, ardından Apps Script projesinin Classroom erişimine izin isteyebilir. İzinleri verince ilk aktarım otomatik başlar. Google sayfası aktarımın tamamlandığını gösterdiğinde **Siteler → Google Classroom** kartında **Son Apps Script aktarımı** zamanına, **Teslimler** bölümünde ödevlerine bak. Sonraki aktarımlar saatte bir çalışır. [Adım adım Classroom rehberi ve hata çözümleri](docs/google-classroom.md#otomatik-kurulum)
+Tarayıcıda derslerini gördüğün Google hesabını seç. Google önce kurulum aracına, ardından Apps Script projesinin Classroom erişimine izin isteyebilir. İzinleri verince ilk aktarım otomatik başlar. Google sayfası aktarımın tamamlandığını gösterdiğinde **Siteler → Google Classroom** kartında **Son Apps Script aktarımı** zamanına, **Teslimler** bölümünde ödevlerine bak. Sonraki aktarımlar yaklaşık 10 dakikada bir çalışır. [Adım adım Classroom rehberi ve hata çözümleri](docs/google-classroom.md#otomatik-kurulum)
 
 <a id="ubys-sayfalari"></a>
 
@@ -172,7 +172,9 @@ Tarayıcıda derslerini gördüğün Google hesabını seç. Google önce kurulu
 
 ### Cloudflare’ın çalıştığını nasıl kontrol ederim?
 
-UniTakip’te **Siteler** sayfasını aç. Bir sitenin kartındaki **Son başarılı kontrol** zamanı, Cloudflare’ın o siteyi en son ne zaman okuyabildiğini gösterir. Varsayılan tam tarama aralığı 60 dakikadır. Arada 10 dakikalık arka plan kontrolleri ve bunların ortasında yalnızca ÜBYS oturumu için ek bir yoklama vardır. Bu yoklama, okulun süresini doldurduğu oturumu yeniden açamaz.
+UniTakip’te **Siteler** sayfasını aç. Bir sitenin kartındaki **Son başarılı kontrol** zamanı, o sitenin en son ne zaman okunabildiğini gösterir. Varsayılan tam tarama aralığı 60 dakikadır. Tüm sitelerin daha sık taranması için **Ayarlar → Kontrol sıklığı → 10 dk** seçeneğini kullan. Apps Script bağlantısı olan Classroom, kendi 10 dakikalık zamanlayıcısıyla gönderim yapar.
+
+ÜBYS oturumu yaklaşık 5 dakikada bir yoklanır. Geçici bir giriş hatasında UniTakip mevcut bağlantıyı tekrar dener. Okul veya Google bağlantının geçersiz olduğunu doğrularsa yeniden bağlanman gerekir.
 
 Cloudflare tarafında **Workers & Pages → unitakip → Settings → Trigger Events → View events** yolundan zamanlanmış çalışmaları görebilirsin. İki zamanlama dağıtım sırasında proje ayarlarından kurulur. [Cloudflare zamanlanmış görevler rehberi](https://developers.cloudflare.com/workers/configuration/cron-triggers/)
 

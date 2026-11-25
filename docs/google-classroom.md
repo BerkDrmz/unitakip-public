@@ -14,7 +14,7 @@ UniTakip Classroom’daki etkin öğrenci derslerini, yayınlanmış ödevleri v
    ```
 
 3. Açılan Google ekranında derslerini gördüğün hesabı seç. İlk kurulumda **clasp – The Apps Script CLI** izni istenebilir. Bu izin, komutun hesabında özel Apps Script projesini oluşturmasını sağlar. Ardından **UniTakip Classroom** ekranında Classroom erişimine izin ver. Tarayıcı açılmazsa terminalde gösterilen Google bağlantısını aç.
-4. Google sayfasında **İlk Classroom aktarımı tamamlandı** mesajını gördüğünde paneline dön. **Siteler → Google Classroom** kartındaki **Son Apps Script aktarımı** zamanını ve **Teslimler** bölümündeki ödevlerini kontrol et. Sonraki aktarımlar saatte bir çalışır.
+4. Google sayfasında **İlk Classroom aktarımı tamamlandı** mesajını gördüğünde paneline dön. **Siteler → Google Classroom** kartındaki **Son Apps Script aktarımı** zamanını ve **Teslimler** bölümündeki ödevlerini kontrol et. Sonraki aktarımlar yaklaşık 10 dakikada bir çalışır.
 
 Bu akış ayrı bir Cloudflare test panelinde gerçek Google hesabıyla doğrulandı. İzinlerden sonra ilk ödevler otomatik olarak panele geldi.
 
@@ -33,7 +33,7 @@ Bu yöntemde Google Apps Script, Classroom hizmeti için kendi varsayılan proje
 1. UniTakip’te takibin açık olduğunu kontrol et. **Siteler → Site ekle** bölümüne `classroom.google.com` yaz. Mevcut bir Classroom kaydın varsa onu kullan.
 2. Classroom kartında **Apps Script ile bağlan → Tarayıcıdan elle kur** düğmesine bas. Bu ekran, sana özel kodu ve manifest dosyasını ayrı ayrı kopyalamanı sağlar.
 3. Classroom derslerini gördüğün Google hesabıyla bir Apps Script projesi aç. **Proje Ayarları** bölümünden `appsscript.json` dosyasını düzenleyicide göstermeyi seç. UniTakip’in hazırladığı metinleri `appsscript.json` ve `Code.gs` dosyalarına yapıştırıp kaydet. [Apps Script ana sayfası](https://script.google.com/home)
-4. Düzenleyicide **startUniTakip** işlevini seçip **Çalıştır**’a bas. Google’da Classroom erişimine izin ver. İlk aktarım başarılı olunca **Son Apps Script aktarımı** zamanı ve okunan kayıtlar Classroom kartında görünür. Script sonraki aktarımları saatte bir yapar. [Apps Script zamanlayıcıları](https://developers.google.com/apps-script/guides/triggers/installable#time-driven_triggers)
+4. Düzenleyicide **startUniTakip** işlevini seçip **Çalıştır**’a bas. Google’da Classroom erişimine izin ver. İlk aktarım başarılı olunca **Son Apps Script aktarımı** zamanı ve okunan kayıtlar Classroom kartında görünür. Script sonraki aktarımları yaklaşık 10 dakikada bir yapar. [Apps Script zamanlayıcıları](https://developers.google.com/apps-script/guides/triggers/installable#time-driven_triggers)
 
 Aktarım anahtarı `Code.gs` dosyasında yer alır. Projeyi özel tut. İlk aktarım gelmezse Apps Script’te **Yürütmeler** bölümündeki hata mesajına bak. Yeni kod hazırlamak önceki anahtarı geçersiz kılar. Sadece aktarımı yeniden denemek için mevcut projedeki **syncUniTakip** işlevini çalıştır. UniTakip bir aktarımda en fazla 80 etkin ders, 2.000 kayıt ve 1 MB veri alır.
 

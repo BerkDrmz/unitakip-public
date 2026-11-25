@@ -19,7 +19,19 @@ export function flatten(value, prefix = '', result = {}) {
 
 export async function moodleCall(client, fn, args = {}) {
   if (!READ_ONLY.has(fn)) throw new MonitorError('unsafe', 'Moodle yazma işlevi engellendi.');
-  return requestMoodle(client, fn, args);
+  try { return await requestMoodle(client, fn, args); }
+  catch (error) {
+    if (error.code !== 'auth' || !client.allowTokenCheck) throw error;
+    client.allowTokenCheck = false;
+    const identity = await requestMoodle(client, 'core_webservice_get_site_info', {});
+    if (!identity?.userid) throw new MonitorError('site', 'Moodle bağlantısı doğrulanamadı.');
+    if (fn === 'core_webservice_get_site_info') return identity;
+    try { return await requestMoodle(client, fn, args); }
+    catch (retryError) {
+      if (retryError.code !== 'auth') throw retryError;
+      throw new MonitorError('site', 'Moodle bağlantısı açık ancak bölüm yeniden okunamadı.');
+    }
+  }
 }
 
 function moodleError(data) {
@@ -83,7 +95,7 @@ function snapshotReader(client, available) {
           }
           staged.forEach((entry, index) => cache.set(key(...group[index]), entry));
         } catch (error) {
-          if (['auth', 'deadline', 'quota'].includes(error.code)) throw error;
+          if (['deadline', 'quota'].includes(error.code) || (error.code === 'auth' && !client.allowTokenCheck)) throw error;
           // Destek kaldırılırsa, yanıt çok büyükse ya da sunucu toplu okumayı reddederse veri atlanmaz.
           enabled = false;
           return;

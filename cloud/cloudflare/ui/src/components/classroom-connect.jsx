@@ -68,7 +68,7 @@ function ClassroomScriptSetup({ site, onClose }) {
           </li>
           <li>
             Düzenleyicinin işlev listesinden <strong>startUniTakip</strong>’i seç ve <strong>Çalıştır</strong>’a bas. Google izin ekranında Classroom hesabını seç.
-            İlk aktarım tamamlandığında UniTakip’te kartı yenile. Sonraki aktarımlar saatte bir çalışır.
+            İlk aktarım tamamlandığında UniTakip’te kartı yenile. Sonraki aktarımlar yaklaşık 10 dakikada bir çalışır.
           </li>
         </ol>
       )}

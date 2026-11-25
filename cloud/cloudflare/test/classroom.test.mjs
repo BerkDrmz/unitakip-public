@@ -9,6 +9,19 @@ const oauth = { id: 'synthetic-client', secret: 'synthetic-secret' };
 const origin = 'https://panel.ornek.edu.tr';
 const consentFor = () => classroomConsent(oauth, origin, 'classroom', { id: 'session-id', expiry: 10000 }, 1000);
 
+test('a Classroom API rejection refreshes once and retries with the current token', async () => {
+  const platform = { oauth, connection: { refreshToken: 'synthetic-refresh' } };
+  let refreshes = 0;
+  const reads = [];
+  const result = await classroomSnapshot(platform, { fetcher: async (url, options) => {
+    if (new URL(url).hostname === 'oauth2.googleapis.com') return Response.json({ access_token: 'access-' + ++refreshes });
+    reads.push(options.headers.Authorization);
+    return reads.length === 1 ? Response.json({}, { status: 401 }) : Response.json({ courses: [] });
+  } });
+  assert.deepEqual(reads, ['Bearer access-1', 'Bearer access-2']);
+  assert.deepEqual(result.complete, ['classroom/courses']);
+});
+
 test('Google consent uses offline read-only permissions, PKCE and a time-limited browser binding', async () => {
   const consent = await consentFor();
   const url = new URL(consent.url);

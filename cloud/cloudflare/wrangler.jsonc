@@ -23,7 +23,7 @@
   "triggers": {
     "crons": [
       "7,17,27,37,47,57 * * * *",
-      // Olağan kontrollerin arasında yalnızca ÜBYS oturumu yoklanır.
+      // Olağan kontrollerin arasında ÜBYS notları ve oturumu kontrol edilir.
       "2,12,22,32,42,52 * * * *"
     ]
   },

@@ -65,7 +65,8 @@ export const BUCKETS = [
 ];
 
 export function intervalLabel(minutes) {
-  return minutes === 30 ? "30 dakikada bir" : minutes === 120 ? "2 saatte bir" : "saatte bir";
+  if (minutes === 10 || minutes === 30) return `${minutes} dakikada bir`;
+  return minutes === 120 ? "2 saatte bir" : "saatte bir";
 }
 
 export function fileSize(bytes) {

@@ -1,7 +1,7 @@
 // The installer deploys this page with MYSELF access and USER_ACCESSING execution.
 function doGet() {
   ScriptApp.requireAllScopes(ScriptApp.AuthMode.FULL);
-  let message = 'İlk Classroom aktarımı tamamlandı. Takip saatte bir otomatik devam edecek.';
+  let message = 'İlk Classroom aktarımı tamamlandı. Takip yaklaşık 10 dakikada bir devam edecek.';
   try {
     startClassroom_(true);
   } catch {

@@ -43,7 +43,7 @@ Panel `https://unitakip.<alt-alan-adın>.workers.dev/` adresindedir. React/Vite 
   isteklerle yapılır. Bütün kayıtlar her tam taramada yeniden okunur; taramalar arasında içerik önbelleği yoktur.
   Toplu uç nokta desteklenmiyorsa veya geçersiz yanıt verirse tekli okuma kullanılır. Bölüm hatasında
   sunucunun atladığı diğer okumalar tekli tamamlanır; oturum ve kota hataları üst kontrol akışına iletilir.
-- Takip duraklatılıp sürdürülebilir; tam tarama aralığı 30/60/120 dakika seçilebilir.
+- Takip duraklatılıp sürdürülebilir. Tam tarama aralığı 10, 30, 60 veya 120 dakika olarak seçilebilir.
   Cron'ın 10 dakikalık oturum/yeniden deneme ritmi korunur.
 - Giriş kodu yalnızca yapılandırılmış sahibin e-postasına gönderilir. Kullanıcıdan
   rastgele bir alıcı adresi kabul edilmez. Kod 10 dakika/tek kullanım ve 5 yanlış
@@ -72,7 +72,7 @@ Yerel önizlemedeki `123456` kodu ve örnek veriler yalnızca Vite geliştirme s
 
 - Worker'ın 10 dakikalık Cron tetikleyicisi tek bir Durable Object'i çağırır.
 - Başlatmadan 30 saniye sonra bir defalık kalıcı alarm ilk arka plan kontrolünü çalıştırır.
-- Tam tarama saatte bir; aradaki çalışmalarda web oturumlarının erişimi kontrol edilir,
+- Varsayılan tam tarama saatte bir çalışır. Aradaki çalışmalarda web oturumlarının erişimi kontrol edilir,
   dosya kuyruğu ve e-posta tekrar denemeleri sürdürülür.
 - HTML ayrıştırma ve takip SQLite Durable Object içinde gerçekleşir (belgelenen varsayılan
   CPU sınırı 30 saniye). Worker yalnızca yönlendirir.
@@ -199,9 +199,10 @@ Eski `finish-learning-login.py` aynı komutu `ogreniyorum` için çağırır.
 - Erişim, giriş, okuma ve anket/onay ekranı hataları ilk tespit edilen kontrolde, diğer sitelerin
   taraması bitmeden gönderilmeye çalışılır. Aynı kesinti sürdükçe uyarı yinelenmez; düzelip yeniden
   bozulursa yeni olay olarak bildirilir. Giriş sayfasıyla gelen anonim çerezler saklı oturumun üzerine
-  yazılmaz. Moodle tokenı ve web oturumları 10 dakikalık olağan kontrollerde sınanır. Bartın ÜBYS’ye
-  arada bir oturum isteği daha gönderildiği için ÜBYS yaklaşık 5 dakikada bir yoklanır. Ara yoklama
-  geçerli oturumun yenilenen çerezlerini saklar. Tam taramayı ve giriş uyarılarını olağan kontrol yürütür.
+  yazılmaz. Web sayfalarında ilk giriş hatasından sonra mevcut oturumla bir okuma daha denenir. Bartın ÜBYS'de
+  tekrar okumadan önce oturum ayrıca doğrulanır ve olağan kontroller arasında korunur. Moodle tokenı resmî
+  kullanıcı bilgisi servisiyle doğrulanır. Classroom API bir isteği reddederse kayıtlı Google izniyle erişim
+  tokenı bir kez yenilenir. Classroom Apps Script, geçici servis hatasında okumasını tekrar dener.
   Düzelme raporunda da yalnızca düzelen siteler yer alır.
 - Toplu görünüm koruması: bir bölümde tek kontrolde 12 ya da daha çok yeni/güncellenen kayıt varsa
   tek özet gönderilir; bütün kayıtlar panelde korunur. Özet yeni ve güncellenen sayılarını ayırır ve ilk

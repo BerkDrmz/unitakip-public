@@ -321,10 +321,21 @@ test('Classroom OAuth callback requires the initiating browser, rejects revocati
 });
 
 test('Classroom Apps Script pairing, import, replay and rotation are scoped to the recorded site', async () => {
-  const script = await bundle({ entryPoints: [new URL('../src/worker.js', import.meta.url).pathname] });
+  const script = await bundle({ stdin: { contents: `
+    import worker, { Monitor } from './src/worker.js';
+    export default worker;
+    export class TestMonitor extends Monitor {
+      async fetch(request) {
+        if (new URL(request.url).pathname === '/test-alarm') {
+          return Response.json(await this.ctx.storage.getAlarm());
+        }
+        return super.fetch(request);
+      }
+    }
+  `, resolveDir: path.resolve('.'), sourcefile: 'classroom-notification-test.js' } });
   const mf = new Miniflare(convertV4MiniflareOptions({ modules: true, script, compatibilityDate: '2026-11-01',
     bindings: { ...bindings, CONFIG_JSON: JSON.stringify({ ...fakeConfig, platforms: {} }), LIVE_ENABLED: 'true' },
-    durableObjects: { MONITOR: { className: 'Monitor', useSQLite: true } } }));
+    durableObjects: { MONITOR: { className: 'TestMonitor', useSQLite: true } } }));
   try {
     const base = 'https://panel.test';
     const session = await issueSession(bindings.STATE_KEY);
@@ -332,6 +343,9 @@ test('Classroom Apps Script pairing, import, replay and rotation are scoped to t
     const call = (path, options) => mf.dispatchFetch(base + path, options);
     const post = (path, payload, headers = owner) => call(path, { method: 'POST', headers, body: JSON.stringify(payload) });
     const dashboard = async () => (await call('/api/dashboard', { headers: owner })).json();
+    const namespace = await mf.getDurableObjectNamespace('MONITOR');
+    const object = namespace.get(namespace.idFromName('personal-monitor-v1'));
+    const alarm = async () => (await object.fetch(base + '/test-alarm')).json();
 
     assert.equal((await post('/start', {}, { ...auth, 'Content-Type': 'application/json' })).status, 200);
     const site = (await (await post('/api/sites/save', { base_url: 'classroom.google.com' })).json()).site;
@@ -365,10 +379,12 @@ test('Classroom Apps Script pairing, import, replay and rotation are scoped to t
     assert.equal(view.pending, 0);
     assert.ok(view.sites[0].classroomSyncAt);
     assert.ok(!JSON.stringify(view).includes(token));
+    const startupAlarm = await alarm();
 
     const newWork = [{ id: '2', title: 'Yeni ödev' }];
     assert.equal(await (await upload(token, shape(t + 1, newWork))).json().then((value) => value.items), 2);
     assert.equal((await dashboard()).pending, 1);
+    assert.ok(await alarm() < startupAlarm - 10000);
     assert.equal((await (await upload(token, shape(t))).json()).duplicate, true);
     assert.equal((await upload(token, shape(t + 2, newWork, '22222222-2222-4222-8222-222222222222'))).status, 409);
     assert.equal((await dashboard()).tasks.length, 2);

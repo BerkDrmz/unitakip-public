@@ -69,6 +69,7 @@ export function SettingsPage({ data, active, working, busy, onAction, onTestMail
                   value={data.intervalMinutes}
                   onChange={(v) => !busy && !working && v !== data.intervalMinutes && onAction("settings", { intervalMinutes: v })}
                   options={[
+                    [10, "10 dk"],
                     [30, "30 dk"],
                     [60, "1 sa"],
                     [120, "2 sa"],

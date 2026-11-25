@@ -82,8 +82,9 @@ export function textDue(item) {
   const dueAt = Date.UTC(year, month - 1, day, hour - 3, minute);
   return Number.isFinite(dueAt) && new Date(dueAt + 3 * 3600000).getUTCDate() === day ? { dueAt, fromText: true } : { dueAt: null, fromText: false };
 }
+const CHECK_INTERVALS = [10, 30, 60, 120];
 export const intervalMinutes = (state) =>
-  [30, 60, 120].includes(state.intervalMinutes) ? state.intervalMinutes : 60;
+  CHECK_INTERVALS.includes(state.intervalMinutes) ? state.intervalMinutes : 60;
 /** Explicit projection: never serialize state/config objects containing cookies, tokens or SMTP secrets. */
 export function dashboard(
   config,
@@ -421,7 +422,7 @@ export async function panelAction(
     // böylece sitede az önce yapılan işlem (anket, yeni ödev) panele hemen yansır.
     if (action === "check") delete state.fullRound;
   } else if (action === "settings") {
-    if (![30, 60, 120].includes(payload.intervalMinutes))
+    if (!CHECK_INTERVALS.includes(payload.intervalMinutes))
       throw new MonitorError("config", "Kontrol aralığı geçersiz.");
     state.intervalMinutes = payload.intervalMinutes;
     state.nextFullAt = Math.min(

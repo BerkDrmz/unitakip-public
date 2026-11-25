@@ -117,6 +117,8 @@ test('panel actions persist before durable scheduling and pause cancels startup 
   await panelAction('resume', {}, state, store, db, 20000); assert.equal(state.armed, true);
   await assert.rejects(panelAction('settings', { intervalMinutes: 1 }, state, store, db));
   await panelAction('settings', { intervalMinutes: 30 }, state, store, db, 20000); assert.equal(state.intervalMinutes, 30);
+  await panelAction('settings', { intervalMinutes: 10 }, state, store, db, 20000);
+  assert.equal(state.intervalMinutes, 10); assert.equal(state.nextFullAt, 620000);
 });
 
 test('notification history is bounded without changing pending queue', () => {

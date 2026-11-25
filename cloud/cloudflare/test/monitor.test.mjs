@@ -6,7 +6,7 @@ import { moodleCall, moodleSnapshot, flatten } from '../src/moodle.js';
 import { Vault, b64 } from '../src/store.js';
 import { hash } from '../src/hash.js';
 import { smtp, message } from '../src/smtp.js';
-import { baseline, configuration, tick, assignmentTest } from '../src/runtime.js';
+import { baseline, configuration, tick, assignmentTest, keepUbysSession } from '../src/runtime.js';
 
 const now = 1900000000000;
 const HOUR_MS = 3600000;
@@ -16,6 +16,56 @@ const platform = { base_url: 'https://example.com/', cookies: [] };
 const fast = { pause: async () => {}, clock: () => now, deadline: now + 240000 };
 const key = b64(crypto.getRandomValues(new Uint8Array(32)));
 const mailConfig = { to: 'student@example.com', smtp: { username: 'student@gmail.com', password: 'abcdefghijklmnop' } };
+
+test('ÜBYS grade checks notify once between full scans without changing unrelated scopes', async () => {
+  const base = 'https://ubys.bartin.edu.tr';
+  const sessionCheck = base + '/conversation/GetMyNewMessagesCount';
+  const grade = { id: 'grades', kind: 'grade', url: base + '/AIS/Student/Class/Index', content_selector: '#grades', track_text: false };
+  const assignment = { id: 'assignments', kind: 'assignment', url: base + '/assignments', content_selector: '#tasks' };
+  const ubys = { base_url: base + '/', type: 'webpages', pages: [grade, assignment], session_check_url: base + '/',
+    logged_out_markers: ['id="loginForm"'], cookies: [{ name: 'session', value: 'original', domain: 'ubys.bartin.edu.tr', path: '/', expires: -1 }] };
+  const config = { ...mailConfig, platforms: { ubys } };
+  const previous = Date.now() - 600000;
+  const table = (score) => `<table id="grades"><tr><th>Sınav</th><th>Not</th></tr><tr><td>Vize</td><td>${score}</td></tr></table>`;
+  let state = emptyState();
+  state.armed = true;
+  state.lastFullAt = previous;
+  state.sites = [{ id: 'ubys', type: 'webpages', preset: 'bartin-ubys', name: 'ÜBYS', base_url: ubys.base_url,
+    pages: ubys.pages, session_check_url: ubys.session_check_url }];
+  mergeSnapshot(state, 'ubys', { items: [...parsePage(table(''), grade.url, grade), makeItem(assignment.id, '1', 'assignment', 'Ev ödevi')],
+    complete: [grade.id, assignment.id], errors: [] }, previous);
+  state.platforms.ubys.partial = [{ scope: assignment.id, code: 'site' }];
+  const before = structuredClone(state.platforms.ubys);
+  const store = { load: async () => structuredClone(state), save: async value => { state = structuredClone(value); } };
+  const requests = [];
+  let sends = 0, reject = false;
+  const connection = smtpMock().connect;
+  const options = { pause: async () => {}, connect: (...args) => { sends++; return connection(...args); }, fetcher: async (url) => {
+    requests.push(url);
+    if (reject) return new Response('<form id="loginForm"></form>');
+    if (url === sessionCheck) return Response.json(0);
+    return new Response(url === grade.url ? table('82') : '<main>Öğrenci ekranı</main>');
+  } };
+  await keepUbysSession(config, store, options);
+  assert.deepEqual(requests, [grade.url]);
+  assert.equal(sends, 1);
+  assert.equal(state.activity.at(-1).category, 'grade');
+  assert.equal(state.activity.at(-1).type, 'updated');
+  assert.equal(Object.keys(state.pending).length, 0);
+  assert.equal(state.lastFullAt, previous);
+  assert.equal(state.platforms.ubys.lastSuccess, previous);
+  assert.deepEqual(state.platforms.ubys.partial, before.partial);
+  assert.equal(state.platforms.ubys.scopes.assignments, previous);
+  await keepUbysSession(config, store, options);
+  assert.deepEqual(requests, [grade.url, sessionCheck]);
+  assert.equal(sends, 1);
+  state.platforms.ubys.lastGradeCheckAt = previous;
+  reject = true;
+  await keepUbysSession(config, store, options);
+  assert.deepEqual(requests.slice(-2), [grade.url, sessionCheck]);
+  assert.equal(sends, 1);
+  assert.equal(state.platforms.ubys.cookies[0].value, 'original');
+});
 
 test('displayed links keep page IDs while stripping sign-in fields', () => {
   const link = 'https://student:example@portal.test/page?id=123&refresh_token=synthetic&id_token=synthetic&client_secret=synthetic#main';

@@ -1,6 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { moodleSnapshot, moodleCall, READ_ONLY } from '../src/moodle.js';
+
+test('Moodle verifies a rejected token before retrying a read', async () => {
+  const calls = [];
+  const client = { allowTokenCheck: true, platform: { base_url: 'https://moodle.example/', token: 'synthetic' },
+    request: async (_url, { payload }) => {
+      calls.push(payload.wsfunction);
+      return { text: JSON.stringify(calls.length === 1 ? { errorcode: 'invalidtoken' }
+        : calls.length === 2 ? { userid: 123 } : { courses: [] }) };
+    } };
+  assert.deepEqual(await moodleCall(client, 'mod_assign_get_assignments'), { courses: [] });
+  assert.deepEqual(calls, ['mod_assign_get_assignments', 'core_webservice_get_site_info', 'mod_assign_get_assignments']);
+});
 import { emptyState, mergeSnapshot, webSnapshot } from '../src/core.js';
 import { SiteClient } from '../src/http.js';
 

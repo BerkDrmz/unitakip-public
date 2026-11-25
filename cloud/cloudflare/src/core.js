@@ -154,12 +154,20 @@ function parseBartinAnnouncements(html, url, page) {
 
 const announcementPageFormat = (url) => `${PUBLIC_ANNOUNCEMENTS_FORMAT}${hash(cleanURL(url))}:`;
 
+async function readWebPage(platform, client, url) {
+  const read = async () => {
+    const response = await client.request(url);
+    assertLoggedIn(response.text, platform);
+    return response;
+  };
+  return client.recoverPage ? client.recoverPage(read) : read();
+}
+
 async function discoverAnnouncements(response, client, platform, canFollow, pageFormat, previousFormat) {
   const local = readPublicAnnouncements(response.text, response.url);
   if (local.next && canFollow) {
     try {
-      const archive = await client.request(local.next);
-      assertLoggedIn(archive.text, platform);
+      const archive = await readWebPage(platform, client, local.next);
       const discovered = readPublicAnnouncements(archive.text, archive.url);
       if (discovered.entries !== null) return { entries: discovered.entries, source: archive.url, followed: true };
     } catch (error) {
@@ -191,8 +199,7 @@ export async function webSnapshot(platform, client, pageFilter = null, previousF
   for (const page of platform.pages) {
     if (pageFilter && !pageFilter(page)) continue;
     try {
-      const response = await client.request(page.url);
-      assertLoggedIn(response.text, platform);
+      const response = await readWebPage(platform, client, page.url);
       // ÜBYS ders modeli: yalnızca açıkça "course_materials" olarak yapılandırılmış ÜBYS ders sayfalarında.
       // Aynı ÜBYS yazılımını kullanan başka üniversitelerde de çalışabilir; yalnızca Bartın'da doğrulandı.
       const isUbysCourse = page.kind === 'course_materials' && new URL(response.url).pathname === '/AIS/Student/Class/ClassDetail';
@@ -243,8 +250,7 @@ export async function webSnapshot(platform, client, pageFilter = null, previousF
     try {
       let detail = configuredDetails.get(course.url);
       if (!detail) {
-        detail = await client.request(course.url);
-        assertLoggedIn(detail.text, platform);
+        detail = await readWebPage(platform, client, course.url);
         if (platform.features?.assignments !== false) {
           const page = { id: course.scope }, scope = `assignments/${page.id}`;
           try {
@@ -479,8 +485,8 @@ export async function ubysCourseTabs(platform, client, response, page, out, now 
   const tab = async (number) => {
     const classId = ubysEmbedded(html, 'EncryptedClassId');
     if (typeof classId !== 'string' || !classId) throw new MonitorError('site', 'ÜBYS ders kimliği bulunamadı.');
-    const result = await client.request(withQuery(`${new URL(response.url).origin}/AIS/Student/Class/GetClassDetailPartial`, { ClassId: classId, ClassDetailPartial: number }));
-    assertLoggedIn(result.text, platform);
+    const url = withQuery(`${new URL(response.url).origin}/AIS/Student/Class/GetClassDetailPartial`, { ClassId: classId, ClassDetailPartial: number });
+    const result = await readWebPage(platform, client, url);
     return result.text;
   };
   await section(`assignments/${page.id}`, features.assignments !== false, async () => parseUbysHomeworks(info, source, page, course, now));
@@ -829,9 +835,11 @@ export function mergeSnapshot(state, name, snapshot, now, options = {}) {
     }
     platform.scopes[scope] = now;
   }
-  if (merged || !gated.size) platform.lastSuccess = now;
-  platform.error = snapshot.errors.length ? (gated.size ? 'gate' : 'partial') : null;
-  platform.partial = snapshot.errors;
+  if (!options.scoped) {
+    if (merged || !gated.size) platform.lastSuccess = now;
+    platform.error = snapshot.errors.length ? (gated.size ? 'gate' : 'partial') : null;
+    platform.partial = snapshot.errors;
+  }
   return changes;
 }
 
@@ -857,7 +865,8 @@ export function activityEntry(change, sentAt) {
 
 export async function flushQueue(state, io, now) {
   const urgent = (change) => change.noticeKey?.startsWith('incident/') ? 1 : 0;
-  const due = Object.values(state.pending).filter((change) => change.nextAttempt <= now && (!io.urgentOnly || urgent(change))).sort((a, b) => urgent(b) - urgent(a));
+  const due = Object.values(state.pending).filter((change) => change.nextAttempt <= now && (!io.urgentOnly || urgent(change)) &&
+    (!io.filter || io.filter(change))).sort((a, b) => urgent(b) - urgent(a));
   const names = [...new Set(due.map((change) => change.platform))];
   let sent = 0;
   for (const name of names) {

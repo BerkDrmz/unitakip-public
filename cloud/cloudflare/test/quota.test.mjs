@@ -28,6 +28,21 @@ test('three healthy intermediate checks persist once, including scheduler metada
   assert.ok(Object.values(state.platforms).every((p) => p.lastConnectivityAt === state.lastTick));
 });
 
+test('a ten-minute cron reads every site despite timing jitter, and skips a fresh full round', async () => {
+  let { state, config } = fixture();
+  const now = Date.now();
+  Object.assign(state, { intervalMinutes: 10, lastFullAt: now - 9 * 60000 - 50000, nextFullAt: now + 10000 });
+  const store = { load: async () => structuredClone(state), save: async (s) => { state = structuredClone(s); } };
+  const options = { scheduled: 'cron', pause: async () => {},
+    fetcher: async () => new Response('<div id="c">Coursework</div>') };
+  await tick(config, store, noMail, options);
+  const completed = state.lastFullAt;
+  assert.ok(completed >= now);
+  assert.ok(Object.values(state.platforms).every((platform) => platform.lastSuccess === completed));
+  await tick(config, store, noMail, options);
+  assert.equal(state.lastFullAt, completed);
+});
+
 test('a rotated session cookie is durable before checking the next site', async () => {
   let { state, config } = fixture(), saves = 0, nextChecked = false;
   await tick(config, { load: async () => structuredClone(state), save: async (s) => { saves++; state = structuredClone(s); } }, noMail,
@@ -92,12 +107,12 @@ test('request budget: a full scan that exceeds the per-run subrequest allowance 
   // Üç site × 20 sayfa = 60 istek; tek çalışmanın payı 44.
   const config = { platforms: Object.fromEntries(['a', 'b', 'c'].map((id) => [id, { type: 'webpages', base_url: `https://${id}.uni.edu.tr/`, download_files: false,
     pages: Array.from({ length: 20 }, (_, i) => ({ id: `p${i}`, url: `https://${id}.uni.edu.tr/p${i}` })) }])) };
-  Object.assign(state, { armed: true, nextFullAt: now - 1, lastStatusReportAt: now });
+  Object.assign(state, { armed: true, intervalMinutes: 10, nextFullAt: now - 1, lastStatusReportAt: now });
   let current = state, perRun = [];
   const store = { load: async () => structuredClone(current), save: async (s) => { current = structuredClone(s); } };
-  const run = async () => { let count = 0; await tick(config, store, noMail, { scheduled: 'cron', pause: async () => {},
-    fetcher: async (url) => { count++; return new Response(`<main><p>İçerik ${new URL(url).pathname}</p></main>`); } }); perRun.push(count); };
-  await run();
+  const run = async () => { let count = 0; const result = await tick(config, store, noMail, { scheduled: 'cron', pause: async () => {},
+    fetcher: async (url) => { count++; return new Response(`<main><p>İçerik ${new URL(url).pathname}</p></main>`); } }); perRun.push(count); return result; };
+  assert.equal((await run()).fastPending, true);
   assert.ok(perRun[0] <= 44, `tek çalışmada ${perRun[0]} istek`);
   assert.deepEqual(current.fullRound.done, ['a', 'b']);            // c sıraya kaldı, yarım okunmadı
   assert.equal(current.platforms.c?.error ?? null, null);           // "siteye ulaşılamıyor" uyarısı yok
@@ -136,7 +151,7 @@ test('keep-alive: during a multi-run full scan every cookie site is contacted in
   assert.equal(Object.values(current.pending).filter((change) => change.noticeKey?.startsWith('incident/')).length, 0);
 });
 
-test('a one-off login page does not overwrite the stored session cookies, and the session continues at the next check', async () => {
+test('a rejected web session is confirmed with the stored cookie and can recover later', async () => {
   const now = Date.now(), state = emptyState();
   const config = { platforms: { web: { type: 'webpages', base_url: 'https://web.uni.edu.tr/', download_files: false,
     cookies: [{ name: 'sid', value: 'good', domain: 'web.uni.edu.tr', path: '/' }], pages: [{ id: 'p', url: 'https://web.uni.edu.tr/p' }] } } };
@@ -150,10 +165,43 @@ test('a one-off login page does not overwrite the stored session cookies, and th
   assert.deepEqual(current.platforms.web.cookies.map((cookie) => cookie.value), ['good']);
   glitch = false;
   await tick(config, store, noMail, options);
-  assert.deepEqual(sent, ['sid=good', 'sid=good']);
+  assert.deepEqual(sent, ['sid=good', 'sid=good', 'sid=good']);
   assert.equal(current.platforms.web.error, null);
   assert.equal(Object.values(current.pending).filter((change) => change.noticeKey?.startsWith('incident/')).length, 1);
   assert.deepEqual(current.connectionLog.map((entry) => entry.code), ['auth', 'ok']);
+});
+
+test('ÜBYS verifies a suspected session failure and retries the same page with the trusted cookie', async () => {
+  const origin = 'https://ubys.bartin.edu.tr', endpoint = '/conversation/GetMyNewMessagesCount', now = Date.now();
+  const config = { platforms: { ubys: { type: 'webpages', base_url: origin + '/', download_files: false,
+    cookies: [{ name: 'sid', value: 'good', domain: 'ubys.bartin.edu.tr', path: '/' }],
+    pages: [{ id: 'p', url: origin + '/p' }] } } };
+  let state = { ...emptyState(), armed: true, intervalMinutes: 10, lastStatusReportAt: now };
+  const store = { load: async () => structuredClone(state), save: async (value) => { state = structuredClone(value); } };
+  const seen = [];
+  let expired = false, pageReads = 0;
+  const signedOut = () => new Response('<form><input type="password"></form>', {
+    headers: { 'Set-Cookie': 'sid=anonymous; Path=/' },
+  });
+  const options = { force: true, pause: async () => {}, fetcher: async (url, request) => {
+    const { pathname } = new URL(url);
+    seen.push([pathname, request.headers.Cookie]);
+    if (pathname === endpoint) return expired ? signedOut() : Response.json(0);
+    return expired || ++pageReads === 1 ? signedOut() : new Response('<main><p>Duyuru</p></main>');
+  } };
+  await tick(config, store, noMail, options);
+  assert.deepEqual(seen, ['/p', endpoint, '/p'].map((path) => [path, 'sid=good']));
+  assert.equal(state.platforms.ubys.error, null);
+  assert.ok(Object.values(state.platforms.ubys.items).some(({ item }) => item.body === 'Duyuru'));
+  assert.equal(Object.values(state.pending).some((change) => change.noticeKey?.startsWith('incident/')), false);
+
+  seen.length = 0;
+  expired = true;
+  await tick(config, store, noMail, options);
+  assert.deepEqual(seen, ['/p', endpoint].map((path) => [path, 'sid=good']));
+  assert.equal(state.platforms.ubys.error, 'auth');
+  assert.equal(state.platforms.ubys.cookies[0].value, 'good');
+  assert.ok(Object.values(state.pending).some((change) => change.item.title === 'Yeniden giriş gerekiyor'));
 });
 
 test('request budget: a single site that alone exceeds the allowance is reported instead of blocking the others forever', async () => {

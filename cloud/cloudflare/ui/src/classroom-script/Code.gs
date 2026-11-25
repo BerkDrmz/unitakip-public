@@ -9,10 +9,15 @@ function startClassroom_(onlyOnce) {
   if (!lock.tryLock(10000)) throw new Error('UniTakip kurulumu sürüyor. Sayfayı biraz sonra yenile.');
   try {
     const properties = PropertiesService.getUserProperties();
-    const scheduled = ScriptApp.getProjectTriggers().some((trigger) => trigger.getHandlerFunction() === 'syncUniTakip');
+    const previous = ScriptApp.getProjectTriggers().filter((trigger) => trigger.getHandlerFunction() === 'syncUniTakip');
+    const scheduled = previous.length === 1 && previous[0].getUniqueId() === properties.getProperty('UNITAKIP_TEN_MINUTE_TRIGGER');
     if (onlyOnce && scheduled && properties.getProperty('UNITAKIP_SETUP_REVISION') === UNITAKIP.revision) return;
     syncClassroomSnapshot_(properties);
-    if (!scheduled) ScriptApp.newTrigger('syncUniTakip').timeBased().everyHours(1).create();
+    if (!scheduled) {
+      const trigger = ScriptApp.newTrigger('syncUniTakip').timeBased().everyMinutes(10).create();
+      for (const old of previous) ScriptApp.deleteTrigger(old);
+      properties.setProperty('UNITAKIP_TEN_MINUTE_TRIGGER', trigger.getUniqueId());
+    }
     if (UNITAKIP.revision) properties.setProperty('UNITAKIP_SETUP_REVISION', UNITAKIP.revision);
   } finally {
     lock.releaseLock();
@@ -65,7 +70,15 @@ function classroomPages(list, field, query) {
   const rows = [], seen = new Set();
   let pageToken;
   do {
-    const page = list({ ...query, pageSize: 100, ...(pageToken ? { pageToken } : {}) });
+    const params = { ...query, pageSize: 100, ...(pageToken ? { pageToken } : {}) };
+    let page;
+    try {
+      page = list(params);
+    } catch (error) {
+      if (!/temporar(?:y|ily)|service unavailable|internal error|backend error|rate limit|too many requests|\b(?:429|50[0234])\b/i.test(String(error.message || ''))) throw error;
+      Utilities.sleep(1500);
+      page = list(params);
+    }
     rows.push(...(page[field] || []));
     pageToken = page.nextPageToken;
     if (pageToken && seen.has(pageToken)) throw new Error('Classroom sayfalaması tamamlanamadı.');
