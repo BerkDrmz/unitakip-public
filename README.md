@@ -7,7 +7,7 @@ UniTakip; farklı okul sistemlerindeki yaklaşan teslimleri, açıklanan notlar�
 > [!IMPORTANT]
 > Bu depo bir SaaS hizmeti değil, kendi hesabına kurduğun kişisel bir takip sistemidir. Okul ve Gmail bilgilerin geliştiriciyle paylaşılmaz; oturumları ve anahtarları kendi bilgisayarında ve kendi Cloudflare hesabında yönetirsin.
 
-[Ekran görüntüleri](#ekran-görüntüleri) · [İndirme](#indirme) · [Hızlı demo](#hızlı-demo) · [Cloudflare kurulumu](#cloudflare-kurulumu) · [Classroom](#classroom-kurulumu) · [Oturum yenileme](#yeniden-giris) · [Destek](#destek)
+[Ekran görüntüleri](#ekran-görüntüleri) · [İndirme](#indirme) · [Hızlı demo](#hızlı-demo) · [Cloudflare kurulumu](#cloudflare-kurulumu) · [Classroom](#classroom-kurulumu) · [e-Devlet terminal komutu](#e-devlet-terminal) · [Destek](#destek)
 
 ## Özellikler
 
@@ -155,7 +155,7 @@ Tarayıcıda derslerini gördüğün Google hesabını seç. Google önce kurulu
 
 ### ÜBYS’de ilk kez hangi sayfalar izlenecek?
 
-Önce aşağıdaki **e-Devlet ile yeniden giriş** adımlarıyla kurulum bilgisayarında ÜBYS oturumunu aç. Ardından proje klasöründe şu komutu **ilk kurulumda** çalıştır. Bu komut sayfa önerilerini yazar. Önceden elle düzenlediğin bir `config/ubys.pages.yaml` varsa önce yedeğini al.
+Önce [e-Devlet terminal komutuyla](#e-devlet-terminal) kurulum bilgisayarında ÜBYS oturumunu aç. Ardından proje klasöründe şu komutu **ilk kurulumda** çalıştır. Bu komut sayfa önerilerini yazar. Önceden elle düzenlediğin bir `config/ubys.pages.yaml` varsa önce yedeğini al.
 
 ```sh
 .venv/bin/unitakip discover ubys --apply
@@ -187,12 +187,21 @@ Cloudflare tarafında **Workers & Pages → unitakip → Settings → Trigger Ev
 | **Classroom aktarımı gecikti** | [Classroom bağlantısını yeniden çalıştırma](docs/google-classroom.md#baglanti-duserse) adımlarını izle. |
 | **“Siteye ulaşılamadı” veya bakım uyarısı** | Biraz sonra **Bağlantıyı test et** ile tekrar dene. Site yeniden yanıt verdiğinde son başarılı kontrol zamanına bak. |
 
-**ÜBYS’ye yalnızca e-Devlet ile giriyorsan** uyarıyı telefonda açabilirsin. Okul oturumunu Cloudflare’a aktarmak için UniTakip’i kurduğun bilgisayarı kullan.
+<a id="e-devlet-terminal"></a>
 
-1. **Siteler → ÜBYS → Panelden yeniden bağlan → Mac’te e-Devlet ile bağlan** bölümünden komutu **Kopyala**. Bilgisayarında UniTakip proje klasöründe bir terminal aç ve komutu çalıştır. Örneğin varsayılan kayıt için `.venv/bin/python cloud/cloudflare/refresh-session.py ubys` kullanılır. Linux veya WSL’de `python3` yerine gerekirse `.venv/bin/python` yaz. Karttaki `--type` ve `--url` seçeneklerini koru.
-2. Açılan ÜBYS sayfasında **e-Devlet ile Giriş**’i seç. T.C. kimlik numaranı ve e-Devlet şifreni yalnızca resmî `giris.turkiye.gov.tr` ekranına gir. ÜBYS’ye döndüğünde giriş otomatik algılanmazsa terminalde **Enter**’a bas.
-3. Terminal okul oturumunu kendi Cloudflare hesabına aktarmayı sorduğunda **e** yazıp **Enter**’a bas. **Oturum aktarıldı** mesajından sonra telefondan da devam edebilirsin.
-4. **Siteler → ÜBYS → Bağlantıyı test et** ile erişimi doğrula. Yeni kayıtları hemen taramak istersen **Bugün → Şimdi kontrol et**’e bas. Tur tamamlanınca ÜBYS kartında **Son başarılı kontrol** zamanını kontrol et.
+### ÜBYS’yi e-Devlet ile terminalden yeniden bağla
+
+UniTakip’i kurduğun bilgisayarda terminali `README.md` ve `cloud` klasörünün bulunduğu proje dizininde aç. Varsayılan Bartın ÜBYS kaydı (`ubys`) için şu komutu kopyalayıp çalıştır.
+
+```sh
+.venv/bin/python cloud/cloudflare/refresh-session.py ubys
+```
+
+ÜBYS’yi farklı bir adrese veya ayrı bir site kaydına eklediysen **Siteler → ilgili site → Panelden yeniden bağlan** bölümündeki **Kopyala** düğmesini kullan. Kartta `--type` ve `--url` varsa bu seçenekleri komutla birlikte kopyala.
+
+1. Açılan ÜBYS sayfasında **e-Devlet ile Giriş**’i seç. T.C. kimlik numaranı ve e-Devlet şifreni yalnızca resmî `giris.turkiye.gov.tr` ekranına gir. ÜBYS’ye döndüğünde giriş otomatik algılanmazsa terminalde **Enter**’a bas.
+2. Terminal oturumu kendi Cloudflare hesabına yüklemeyi sorduğunda **e** yazıp **Enter**’a bas. **Oturum aktarıldı** mesajından sonra paneli telefondan da açabilirsin.
+3. **Siteler → ÜBYS → Bağlantıyı test et** ile erişimi doğrula. Yeni kayıtları hemen taramak için **Bugün → Şimdi kontrol et**’i kullan.
 
 [Site ekleme ve oturum yenileme](docs/panel-kullanimi.md) · [ÜBYS sayfalarını keşfetme ve yerel kurulum](docs/08-kurulum.md) · [Cloudflare çalışma düzeni ve testler](cloud/cloudflare/README.md) · [Docker ile kurulum](docs/06-dagitim-vps.md)
 

@@ -24,7 +24,7 @@ nedeni yazılır:
 
 ## Oturum yenileme
 
-Giriş isteyen bir sitenin oturumu dolduğunda e-posta gelir ve panelde **Giriş gerekli** görünür. **Siteler → ilgili site → Panelden yeniden bağlan** yolunu aç. Desteklenen sitelerde site şifren ve gerekiyorsa SMS kodunla telefondan veya bilgisayardan bağlanabilirsin. ÜBYS’ye e-Devlet ile giriyorsan ya da site tarayıcıda doğrulama istiyorsa, kartta gösterilen komutu kurulum yaptığın bilgisayarda proje klasöründen çalıştır. [Adım adım yeniden giriş](../README.md#yeniden-giris)
+Giriş isteyen bir sitenin oturumu dolduğunda e-posta gelir ve panelde **Giriş gerekli** görünür. **Siteler → ilgili site → Panelden yeniden bağlan** yolunu aç. Desteklenen sitelerde site şifren ve gerekiyorsa SMS kodunla telefondan veya bilgisayardan bağlanabilirsin. Tarayıcıda doğrulama isteyen siteler için karttaki komutu kurulum yaptığın bilgisayarda proje klasöründen çalıştır. [ÜBYS için kopyalanabilir e-Devlet komutu](../README.md#e-devlet-terminal)
 
 ```bash
 python3 cloud/cloudflare/refresh-session.py <site-id>
