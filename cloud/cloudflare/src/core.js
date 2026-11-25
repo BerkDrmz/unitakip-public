@@ -763,12 +763,13 @@ export function mergeSnapshot(state, name, snapshot, now, options = {}) {
     rebaselineLegacyLearning(platform, scope);
     const incoming = snapshot.items.filter((item) => item.scope === scope);
     const previous = Object.values(platform.items).filter((item) => item.scope === scope && !item.missingSince);
+    let confirmRemovals = true;
     if (previous.length >= 5 && incoming.length < previous.length * 0.5) {
       const signature = hash(incoming.map((item) => item.id).sort());
       const guard = platform.guards[scope];
       platform.guards[scope] = { signature, count: guard?.signature === signature ? guard.count + 1 : 1 };
-      if (platform.guards[scope].count < 3) continue;
-      queueNotice(state, `drop/${name}/${scope}`, name, 'İçerik beklenmedik şekilde azaldı', `${scope} bölümü üç ardışık kontrolde azaldı.`, now);
+      confirmRemovals = platform.guards[scope].count >= 3;
+      if (confirmRemovals) queueNotice(state, `drop/${name}/${scope}`, name, 'İçerik beklenmedik şekilde azaldı', `${scope} bölümü üç ardışık kontrolde azaldı.`, now);
     } else delete platform.guards[scope];
     // Older snapshots recorded only summary IDs when access was blocked.
     const baseline = !platform.scopes[scope] && !incoming.some(item => item.summaryId && previousSurveyGrades.has(item.summaryId));
@@ -780,6 +781,8 @@ export function mergeSnapshot(state, name, snapshot, now, options = {}) {
     const known = new Set(Object.values(platform.items).filter((record) => record.scope === scope).map((record) => record.content).filter(Boolean));
     const seenContent = new Map(), batch = [];
     for (const item of incoming) {
+      // A fallback page message can replace a temporarily missing table.
+      if (!confirmRemovals && isPageText(item)) continue;
       const fingerprint = itemFingerprint(item);
       const old = platform.items[item.id];
       found.add(item.id);
@@ -822,6 +825,7 @@ export function mergeSnapshot(state, name, snapshot, now, options = {}) {
         batch.slice(0, 10).map((entry) => `• ${entry.item.title}${entry.previous ? `: ${fieldDiff(entry.previous, entry.item).slice(0, 300)}` : ''}`).join('\n') +
         (batch.length > 10 ? `\n… ve ${batch.length - 10} kayıt daha` : ''), now);
     }
+    if (!confirmRemovals) continue;
     for (const [id, record] of Object.entries(platform.items)) if (record.scope === scope && !found.has(id)) {
       // Kaybolan kayıt hemen silinmez: geri gelirse (site geçici olarak eksik döndüyse) yeniden bildirilmez.
       if (record.missingSince) { if (now - record.missingSince > MISSING_KEEP) delete platform.items[id]; continue; }
@@ -856,6 +860,7 @@ export function addActivity(state, entries) {
 }
 export function activityEntry(change, sentAt) {
   return { id: change.id, platform: change.platform, type: change.type,
+    ...(change.noticeKey?.startsWith('bulk/') ? { bulk: true } : {}),
     title: String(change.item?.title || '').slice(0, 300), course: String(change.item?.course || '').slice(0, 300),
     category: academicCategory(change.item), detail: fieldDiff(change.previous, change.item).slice(0, 1800),
     detectedAt: change.detectedAt, sentAt };

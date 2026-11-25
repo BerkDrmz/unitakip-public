@@ -112,9 +112,11 @@ test('panel actions persist before durable scheduling and pause cancels startup 
   const store = { save: async () => calls.push('save') }, db = { setAlarm: async () => calls.push('alarm'), deleteAlarm: async () => calls.push('delete') };
   await panelAction('check', {}, state, store, db, 10000);
   assert.deepEqual(calls, ['save', 'alarm']); assert.equal(state.manualRequestedAt, 10000);
+  state.fullRound = { startedAt: 11000, done: ['first'] };
   await panelAction('pause', {}, state, store, db); assert.equal(state.armed, false); assert.equal(state.manualRequestedAt, null);
   await assert.rejects(panelAction('check', {}, state, store, db), (e) => e.code === 'paused');
   await panelAction('resume', {}, state, store, db, 20000); assert.equal(state.armed, true);
+  assert.equal(state.fullRound, undefined, 'resume must recheck sites read before the pause');
   await assert.rejects(panelAction('settings', { intervalMinutes: 1 }, state, store, db));
   await panelAction('settings', { intervalMinutes: 30 }, state, store, db, 20000); assert.equal(state.intervalMinutes, 30);
   await panelAction('settings', { intervalMinutes: 10 }, state, store, db, 20000);

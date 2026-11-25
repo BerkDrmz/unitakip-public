@@ -146,6 +146,21 @@ test('partial sections and sudden content loss preserve previous data', () => {
   assert.equal(Object.values(state.pending)[0].type, 'notice');
 });
 
+test('a shortened list reports visible academic changes once and protects absent records', () => {
+  const state = emptyState();
+  const assignment = (id, body) => makeItem('p', id, 'assignment', id, { body });
+  const original = Array.from({ length: 8 }, (_, i) => assignment(String(i), 'İlk açıklama'));
+  const visible = [assignment('0', 'Düzeltilen açıklama'), assignment('8', 'Yeni ödev')];
+  const scan = (entries, at) => mergeSnapshot(state, 'site', snap(entries), at, { notifyRemoved: true });
+  scan(original, now);
+  scan(visible, now + 1);
+  scan(visible, now + 2);
+  assert.deepEqual(Object.values(state.pending).map(change => [change.type, change.item.title]), [['updated', '0'], ['new', '8']]);
+  assert.equal(Object.values(state.platforms.site.items).filter(record => !record.missingSince).length, 9);
+  scan([...visible, ...original.slice(1)], now + 3);
+  assert.equal(Object.keys(state.pending).length, 2);
+});
+
 const material = (id, publishedAt, name = id) => makeItem('p', `material/${id}`, 'material', name, { course: 'Ders', material: { url: 'https://ubys.example.edu.tr/c', extension: 'pdf', opensSource: true, publishedAt } });
 const DAY = 86400000;
 

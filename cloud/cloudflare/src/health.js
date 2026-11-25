@@ -22,6 +22,13 @@ const reasons = {
 };
 const OK = 'Son kontrolde hata yok';
 const CHANGE_LABELS = { new: 'yeni', updated: 'güncellendi', removed: 'kaldırıldı', file_ready: 'dosya hazır' };
+function isBulkContent(entry) {
+  if (entry.type !== 'notice') return false;
+  // Older delivered notices retain their system-generated title but no notice key.
+  return entry.bulk === true || entry.noticeKey?.startsWith('bulk/') ||
+    entry.title === 'Toplu içerik göründü' || entry.title === 'Toplu içerik değişikliği';
+}
+const isContent = (entry) => Object.hasOwn(CHANGE_LABELS, entry.type) || isBulkContent(entry);
 const DUE_KINDS = new Set(['assignment', 'quiz', 'event', 'exam']);
 /** Bağlantı geçmişi: her kesintinin başlangıcı ve bitişi (son 100 olay). Yalnızca site kimliği, hata kodu ve zaman tutulur. */
 function logConnection(state, site, code, now) {
@@ -138,7 +145,7 @@ export function queueStatusReport(state, config, now) {
     if (state.notices?.[key]) return;
     const midnight = Date.parse(`${day}T00:00:00+03:00`);
     const changedToday = [...(state.activity || []), ...Object.values(state.pending)].some(entry =>
-      Object.hasOwn(CHANGE_LABELS, entry.type) && (entry.detectedAt ?? entry.sentAt) >= midnight);
+      isContent(entry) && (entry.detectedAt ?? entry.sentAt) >= midnight);
     const healthy = sites.every(site => current[site.id].label === OK);
     const title = healthy ? 'Takip çalışıyor · tüm siteler güncel' : 'Takip çalışıyor · site durumları';
     const changes = changedToday ? 'Bugün içerik değişikliği tespit edildi.' : 'Bugünkü kontrollerde içerik değişikliği tespit edilmedi.';
@@ -146,32 +153,44 @@ export function queueStatusReport(state, config, now) {
     return;
   }
   const names = Object.fromEntries(sites.map((site) => [site.id, site.name]));
-  const isContent = (entry) => Object.hasOwn(CHANGE_LABELS, entry.type);
   const recent = (entry) => (entry.detectedAt ?? entry.sentAt) > now - 86400000;
   const waiting = Object.values(state.pending).filter(isContent);
   const changed = [
     ...(state.activity || []).filter((entry) => isContent(entry) && recent(entry)),
-    ...waiting.filter(recent).map(({ platform, type, item }) => ({ platform, type, course: item.course, title: item.title, waiting: true })),
+    ...waiting.filter(recent).map(change => ({ platform: change.platform, type: change.type, bulk: isBulkContent(change),
+      course: change.item.course, title: change.item.title, waiting: true })),
   ];
   const due = [];
   for (const site of sites) if (!site.paused) for (const record of Object.values(state.platforms[site.id]?.items || {})) {
     const item = record?.item;
-    if (!record.missingSince && item?.dueAt > now && item.dueAt - now <= 7 * 86400000 && DUE_KINDS.has(item.kind)) due.push({ site: site.name, item });
+    if (!record.missingSince && item?.dueAt > now && item.dueAt - now <= 7 * 86400000 && DUE_KINDS.has(item.kind)) due.push({ site: site.name, siteId: site.id, item });
   }
-  // Moodle takvimi ödevin teslimini ayrı bir etkinlik olarak da verir: aynı ders ve aynı anda tek satır gösterilir.
   due.sort((a, b) => a.item.dueAt - b.item.dueAt || (a.item.kind === 'event') - (b.item.kind === 'event'));
-  const seenDue = new Set();
-  const upcoming = due.filter(({ site, item }) => { const key = `${site}|${item.course || ''}|${item.dueAt}`; return !seenDue.has(key) && seenDue.add(key); });
+  const deadlines = new Set();
+  const upcoming = due.filter(({ siteId, item }) => {
+    const title = (item.title || '').trim().toLocaleLowerCase('tr');
+    const key = (name) => JSON.stringify([siteId, item.course || '', item.dueAt, name]);
+    if (item.kind === 'event') {
+      // Moodle may publish a second entry named after the task with a deadline suffix.
+      const task = title.replace(/\s+(?:teslim tarihi|is due)$/u, '');
+      return task === title || !deadlines.has(key(task));
+    }
+    deadlines.add(key(title));
+    return true;
+  });
   const troubled = sites.filter((site) => current[site.id].failing).length;
   const unconfirmed = sites.filter((site) => current[site.id].unconfirmed).length;
   const healthy = sites.every((site) => current[site.id].label === OK);
   const entry = (site, item) => `${site}${item.course ? ` · ${item.course}` : ''} — ${item.title}`;
-  const title = `Günlük özet · ${changed.length ? `${changed.length} yeni içerik/değişiklik` : 'bugün yeni içerik yok'}${troubled ? ` · ${troubled} sitede sorun` : ''}`;
+  const groups = changed.filter(isBulkContent).length;
+  const single = changed.length - groups;
+  const counts = [single && `${single} yeni içerik/değişiklik`, groups && `${groups} toplu içerik bildirimi`].filter(Boolean).join(', ');
+  const title = `Günlük özet · ${counts || 'bugün yeni içerik yok'}${troubled ? ` · ${troubled} sitede sorun` : ''}`;
   queueNotice(state, `status/daily/${day}`, 'system', title,
     `Özet: ${date(now)} (İstanbul).\n\n` +
     'SON 24 SAATTE YENİ İÇERİK\n' +
     (changed.length
-      ? `${changed.slice(0, 15).map((change) => `• ${entry(names[change.platform] || change.platform, change)} (${CHANGE_LABELS[change.type]}${change.waiting ? ', e-posta bekliyor' : ''})`).join('\n')}` +
+      ? `${changed.slice(0, 15).map((change) => `• ${entry(names[change.platform] || change.platform, change)} (${isBulkContent(change) ? 'toplu değişiklik' : CHANGE_LABELS[change.type]}${change.waiting ? ', e-posta bekliyor' : ''})`).join('\n')}` +
         `${changed.length > 15 ? `\n… ve ${changed.length - 15} kayıt daha` : ''}`
       : 'Başarılı kontrollerde yeni ödev, dosya, duyuru, sınav ya da not tespit edilmedi.' +
         `${state.lastFullAt ? ` Son tam kontrol ${date(state.lastFullAt)}.` : ''}`) +

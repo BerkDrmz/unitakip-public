@@ -331,6 +331,37 @@ test('the daily summary leads with the content of the day and the deadlines of t
   assert.doesNotMatch(change.item.body, /Lab 5 teslim tarihi|Proje|Silinen sınav/);
 });
 
+test('different assignments, exams and calendar events can share a deadline', () => {
+  const state = stateAt(EVENING);
+  const dueAt = EVENING + HOUR;
+  const record = (kind, title) => ({ item: { kind, title, course: 'Programlama', dueAt } });
+  state.platforms.x.items = {
+    lab: record('assignment', 'Lab'), essay: record('assignment', 'Rapor'), exam: record('quiz', 'Kısa sınav'),
+    mirror: record('event', 'Lab teslim tarihi'), seminar: record('event', 'Seminer'),
+  };
+  queueStatusReport(state, config, EVENING);
+  const body = pendingReports(state)[0].item.body;
+  for (const title of ['Lab', 'Rapor', 'Kısa sınav', 'Seminer']) assert.ok(body.includes('— ' + title + '\n'), title);
+  assert.doesNotMatch(body, /Lab teslim tarihi/);
+});
+
+test('bulk content is included in daytime and evening reports before and after mail delivery', async () => {
+  for (const alreadySent of [false, true]) {
+    const state = stateAt(EVENING - 7 * HOUR);
+    queueNotice(state, 'bulk/x/test/1', 'x', 'Toplu içerik göründü', 'Bir grup dosya eklendi.', EVENING - 7 * HOUR);
+    if (alreadySent) await accept(state, EVENING - 7 * HOUR);
+    queueStatusReport(state, config, EVENING - 6 * HOUR);
+    const daytime = pendingReports(state)[0];
+    assert.match(daytime.item.body, /içerik değişikliği tespit edildi/);
+    delete state.pending[daytime.id];
+    queueStatusReport(state, config, EVENING);
+    const evening = pendingReports(state)[0].item;
+    assert.match(evening.title, /1 toplu içerik bildirimi/);
+    assert.match(evening.body, /Okul — Toplu içerik göründü/);
+    assert.equal(evening.body.includes('e-posta bekliyor'), !alreadySent);
+  }
+});
+
 test('the daily summary includes detected content still waiting for email', () => {
   const state = stateAt(EVENING - HOUR);
   state.pending.grade = { id: 'grade', platform: 'x', type: 'updated', item: { title: 'Vize', course: 'Web' },

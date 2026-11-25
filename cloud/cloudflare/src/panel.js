@@ -418,9 +418,8 @@ export async function panelAction(
       throw new MonitorError("paused", "Takip duraklatılmış.");
     state.armed = true;
     state.manualRequestedAt = now;
-    // Elle kontrol her zaman bütün siteleri baştan okur: yarım kalmış turda "okundu" sayılan site de yeniden okunur,
-    // böylece sitede az önce yapılan işlem (anket, yeni ödev) panele hemen yansır.
-    if (action === "check") delete state.fullRound;
+    // Duraklama sırasında önceki turda okunmuş bir siteye de yeni içerik eklenmiş olabilir.
+    delete state.fullRound;
   } else if (action === "settings") {
     if (!CHECK_INTERVALS.includes(payload.intervalMinutes))
       throw new MonitorError("config", "Kontrol aralığı geçersiz.");
