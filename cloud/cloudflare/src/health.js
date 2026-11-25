@@ -29,9 +29,10 @@ function logConnection(state, site, code, now) {
 }
 const FAILURES = new Set([...Object.values(reasons), 'Kontrol hatası']);
 
-function discardPendingIncident(state, name) {
+function discardPendingWarnings(state, name, full = false) {
   for (const [id, change] of Object.entries(state.pending)) {
-    if (change.platform === name && change.noticeKey?.startsWith('incident/')) delete state.pending[id];
+    if (change.platform !== name) continue;
+    if (change.noticeKey?.startsWith('incident/') || (full && change.noticeKey?.startsWith('stale/'))) delete state.pending[id];
   }
 }
 
@@ -43,7 +44,7 @@ export function platformFailure(state, name, code, now) {
   const record = state.platforms[name];
   const safeCode = Object.hasOwn(reasons, code) ? code : 'site';
   if (!record.healthIncident || record.healthIncident.code !== safeCode) {
-    discardPendingIncident(state, name);
+    discardPendingWarnings(state, name);
     // Hata türü değişse de kesinti aynı kesintidir: başlangıç zamanı korunur.
     record.healthIncident = { code: safeCode, key: `incident/${name}/${++state.sequence}`, startedAt: record.healthIncident?.startedAt ?? now, since: now, announced: false };
     logConnection(state, name, safeCode, now);
@@ -77,7 +78,7 @@ export function platformRecovered(state, name, now, { full = false } = {}) {
   record.lastConnectivityAt = now;
   // A session check cannot prove that a previously failing content section recovered.
   if (full || ['auth', 'network'].includes(record.healthIncident?.code)) {
-    discardPendingIncident(state, name);
+    discardPendingWarnings(state, name, full);
     if (record.healthIncident) logConnection(state, name, 'ok', now);
     record.healthIncident = null;
     record.error = null;

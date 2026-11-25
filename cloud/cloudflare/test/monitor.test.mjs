@@ -67,6 +67,31 @@ test('ÜBYS grade checks notify once between full scans without changing unrelat
   assert.equal(state.platforms.ubys.cookies[0].value, 'original');
 });
 
+test('a partial ÜBYS grade check queues the readable grade and retains the unread section', async () => {
+  const base = 'https://ubys.bartin.edu.tr';
+  const pages = ['first', 'second'].map(id => ({ id, kind: 'grade', url: base + '/' + id, content_selector: 'table', track_text: false }));
+  const platform = { type: 'webpages', base_url: base + '/', pages, cookies: [{ name: 'session', value: 'test', domain: 'ubys.bartin.edu.tr', path: '/' }] };
+  const config = { ...mailConfig, platforms: { ubys: platform } };
+  const state = emptyState(), previous = Date.now() - 600000;
+  state.armed = true;
+  state.sites = [{ id: 'ubys', preset: 'bartin-ubys', name: 'ÜBYS', ...platform }];
+  const table = score => `<table><tr><th>Sınav</th><th>Not</th></tr><tr><td>Vize</td><td>${score}</td></tr></table>`;
+  mergeSnapshot(state, 'ubys', snap(pages.flatMap(page => parsePage(table(''), page.url, page)), pages.map(page => page.id)), previous);
+  const store = { load: async () => state, save: async () => {} };
+  const options = { pause: async () => {}, fetcher: async url => {
+    if (url === pages[0].url) return new Response(table('82'));
+    if (url === pages[1].url) return new Response('<main>Geçici olarak kullanılamıyor</main>');
+    return Response.json(0);
+  } };
+  await keepUbysSession(config, store, options);
+  await keepUbysSession(config, store, options);
+  const record = state.platforms.ubys;
+  assert.deepEqual(Object.values(state.pending).map(change => [change.item.scope, change.item.fields.Not]), [['first', '82']]);
+  assert.equal(record.scopes.second, previous);
+  assert.equal(record.lastSuccess, previous);
+  assert.equal(record.lastGradeCheckAt, undefined);
+});
+
 test('displayed links keep page IDs while stripping sign-in fields', () => {
   const link = 'https://student:example@portal.test/page?id=123&refresh_token=synthetic&id_token=synthetic&client_secret=synthetic#main';
   assert.equal(cleanURL(link), 'https://portal.test/page?id=123');

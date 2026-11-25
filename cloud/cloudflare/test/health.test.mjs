@@ -233,6 +233,17 @@ test('a deferred login warning is removed on recovery, without removing content 
   ]);
 });
 
+test('an overdue full-check warning remains until that site completes a full scan', () => {
+  const state = stateAt();
+  for (const id of ['x', 'other']) queueNotice(state, `stale/${id}/1`, id, '24 saattir başarılı kontrol yok', '', now);
+  queueNotice(state, 'bulk/x/test', 'x', 'Yeni içerik', '', now);
+  const keys = () => Object.values(state.pending).map(change => change.noticeKey);
+  platformRecovered(state, 'x', now + 1);
+  assert.deepEqual(keys(), ['stale/x/1', 'stale/other/1', 'bulk/x/test']);
+  platformRecovered(state, 'x', now + 2, { full: true });
+  assert.deepEqual(keys(), ['stale/other/1', 'bulk/x/test']);
+});
+
 test('a good session check cannot hide a failing content section', () => {
   const state = stateAt();
   platformFailure(state, 'x', 'partial', now);

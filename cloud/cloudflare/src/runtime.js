@@ -266,8 +266,8 @@ export async function keepUbysSession(config, store, options = {}) {
     if (readGrades) {
       const data = await webSnapshot({ ...platform, features: { ...platform.features, assignments: false } },
         client, (page) => page.kind === 'grade', record.formats);
+      if (data.complete.length) mergeSnapshot(state, 'ubys', data, now, { scoped: true });
       if (data.complete.length && !data.errors.length) {
-        mergeSnapshot(state, 'ubys', data, now, { scoped: true });
         record.lastGradeCheckAt = now;
       } else if (!client.ubysSessionConfirmed) {
         budget.limit = SUBREQUEST_BUDGET;
