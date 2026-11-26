@@ -345,7 +345,7 @@ export async function tick(config, store, connect, { force = false, scheduled = 
         state.platforms[name].readCost = budget.used - startedWith;
         state.platforms[name].lastConnectivityAt = now; // içerik okunabildiyse oturum açıktır (anket ekranı olsa bile)
         if (data.errors.length) {
-          platformFailure(state, name, data.errors.some((error) => error.code === 'gate') ? 'gate' : 'partial', now);
+          platformFailure(state, name, data.errors.some((error) => error.code === 'gate') ? 'gate' : 'partial', now, data.errors);
           await store.save(state); await flush(true);
         } else platformRecovered(state, name, now, { full: true });
       } else if (platform.type !== 'moodle') {

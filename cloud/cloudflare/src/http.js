@@ -41,16 +41,17 @@ export class SiteClient {
             ...(options.payload ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {}) },
           ...(options.payload ? { body: new URLSearchParams(options.payload).toString() } : {}),
         });
-        this.cookies = updateCookies(this.cookies, { 'set-cookie': response.headers.getSetCookie() }, target, this.clock());
         if ([401, 403].includes(response.status)) throw new MonitorError('auth', 'Yeniden giriş gerekiyor.');
         if ([301, 302, 303, 307, 308].includes(response.status)) {
           await response.body?.cancel();
           const location = response.headers.get('location');
           if (!location || method !== 'GET' || ++redirects > 4) throw new MonitorError('auth', 'Giriş yönlendirmesi alındı.');
-          target = safeURL(new URL(location, target).href, this.platform.base_url);
+          const next = safeURL(new URL(location, target).href, this.platform.base_url);
+          this.cookies = updateCookies(this.cookies, { 'set-cookie': response.headers.getSetCookie() }, target, this.clock());
+          target = next;
           continue;
         }
-        if (response.status === 429 || response.status >= 500) throw new MonitorError('network', 'Site geçici olarak erişilemiyor.');
+        if (response.status === 408 || response.status === 429 || response.status >= 500) throw new MonitorError('network', 'Site geçici olarak erişilemiyor.');
         if (response.status >= 400) throw new MonitorError('site', 'Sayfa erişilemiyor.');
         const limit = (options.binary ? 20 : 8) * 1024 * 1024;
         if (Number(response.headers.get('content-length')) > limit) throw new MonitorError('size', 'Yanıt boyutu sınırı aşıldı.');
@@ -68,12 +69,13 @@ export class SiteClient {
         const bytes = new Uint8Array(size);
         let offset = 0;
         for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; }
+        this.cookies = updateCookies(this.cookies, { 'set-cookie': response.headers.getSetCookie() }, target, this.clock());
         this.failures = 0;
         return { status: response.status, url: target, headers: response.headers, bytes,
           text: options.binary ? '' : new TextDecoder().decode(bytes) };
       } catch (error) {
         await response?.body?.cancel().catch(() => {});
-        if (error.code && error.code !== 'network') throw error;
+        if (error instanceof MonitorError && error.code !== 'network') throw error;
         // Platformun kendi sınırı: yeniden denemek payı daha da tüketir ve "siteye ulaşılamıyor" diye yanlış uyarı üretir.
         if (/subrequest/i.test(String(error?.message || ''))) throw new MonitorError('quota', 'Cloudflare dış istek sınırına ulaşıldı.');
         if (++retries >= (this.failures >= 2 ? 1 : 3)) { this.failures++; throw new MonitorError('network', 'Siteye bağlanılamadı.'); }

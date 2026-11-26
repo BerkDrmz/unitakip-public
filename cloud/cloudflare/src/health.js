@@ -30,9 +30,17 @@ function isBulkContent(entry) {
 }
 const isContent = (entry) => Object.hasOwn(CHANGE_LABELS, entry.type) || isBulkContent(entry);
 const DUE_KINDS = new Set(['assignment', 'quiz', 'event', 'exam']);
-/** Bağlantı geçmişi: her kesintinin başlangıcı ve bitişi (son 100 olay). Yalnızca site kimliği, hata kodu ve zaman tutulur. */
-function logConnection(state, site, code, now) {
-  state.connectionLog = [...(Array.isArray(state.connectionLog) ? state.connectionLog : []), { site, code, at: now }].slice(-100);
+// Retain only known error categories and counts. Scope identifiers may contain private data.
+function logConnection(state, site, code, now, errors = []) {
+  const entry = { site, code, at: now };
+  if (errors.length) {
+    entry.sectionErrors = {};
+    for (const error of errors) {
+      const category = Object.hasOwn(reasons, error.code) ? error.code : 'site';
+      entry.sectionErrors[category] = (entry.sectionErrors[category] || 0) + 1;
+    }
+  }
+  state.connectionLog = [...(Array.isArray(state.connectionLog) ? state.connectionLog : []), entry].slice(-100);
 }
 const FAILURES = new Set([...Object.values(reasons), 'Kontrol hatası']);
 
@@ -47,14 +55,14 @@ function discardPendingWarnings(state, name, full = false) {
  * A recovered site starts a new incident even if it fails again on the same day.
  * Erişim, giriş ve okuma hataları ilk tespitte bildirilir. Aynı kesinti sürdükçe yinelenmez.
  */
-export function platformFailure(state, name, code, now) {
+export function platformFailure(state, name, code, now, errors = []) {
   const record = state.platforms[name];
   const safeCode = Object.hasOwn(reasons, code) ? code : 'site';
   if (!record.healthIncident || record.healthIncident.code !== safeCode) {
     discardPendingWarnings(state, name);
     // Hata türü değişse de kesinti aynı kesintidir: başlangıç zamanı korunur.
     record.healthIncident = { code: safeCode, key: `incident/${name}/${++state.sequence}`, startedAt: record.healthIncident?.startedAt ?? now, since: now, announced: false };
-    logConnection(state, name, safeCode, now);
+    logConnection(state, name, safeCode, now, errors);
   }
   record.error = safeCode;
   const incident = record.healthIncident;

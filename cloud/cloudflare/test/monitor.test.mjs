@@ -250,6 +250,34 @@ test('network retry, redirects and renewed cookies work without decompressing tw
   assert.equal((await client.request(platform.base_url)).text, 'hello'); assert.equal(call, 3);
 });
 
+test('temporary transport timeouts retry with the same session and original request budget', async () => {
+  for (const fail of [
+    () => { throw new DOMException('Operation aborted', 'AbortError'); },
+    () => new Response('', { status: 408, headers: { 'Set-Cookie': 'session=expired; Max-Age=0; Path=/' } }),
+    () => new Response('', { status: 503, headers: { 'Set-Cookie': 'session=expired; Max-Age=0; Path=/' } }),
+  ]) {
+    const budget = { used: 0, limit: 2 }, seen = [];
+    const site = { ...platform, cookies: [{ name: 'session', value: 'original', domain: 'example.com', path: '/' }] };
+    const client = new SiteClient(site, { ...fast, budget, fetcher: async (_, options) => {
+      seen.push(options.headers.Cookie);
+      return seen.length === 1 ? fail() : new Response('recovered');
+    } });
+    assert.equal((await client.request(site.base_url)).text, 'recovered');
+    assert.deepEqual(seen, ['session=original', 'session=original']);
+    assert.equal(budget.used, 2);
+  }
+});
+
+test('persistent transport timeouts stop after the normal retry limit and report a network error', async () => {
+  let calls = 0;
+  const client = new SiteClient(platform, { ...fast, fetcher: async () => {
+    calls++;
+    throw new DOMException('Operation aborted', 'AbortError');
+  } });
+  await assert.rejects(client.request(platform.base_url), error => error.code === 'network');
+  assert.equal(calls, 3);
+});
+
 test('auth, cross-host redirects and response-size errors are not retried', async () => {
   for (const [response, code] of [[new Response('', { status: 403 }), 'auth'], [new Response(null, { status: 302, headers: { Location: 'https://evil.com/' } }), 'unsafe'], [new Response('x', { headers: { 'Content-Length': String(9 * 1024 * 1024) } }), 'size']]) {
     let calls = 0;

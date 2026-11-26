@@ -206,6 +206,17 @@ test('a once-only notice is never repeated as a reminder, a regular notice may r
   assert.deepEqual(Object.values(state.pending).map((change) => change.noticeKey), ['other']);
 });
 
+test('a partial-read incident retains only classified error counts after recovery', () => {
+  const state = stateAt();
+  state.platforms.x.partial = [{ scope: 'private', code: 'network' }, { scope: 'private', code: 'network' },
+    { scope: 'private', code: 'maintenance' }, { scope: 'private', code: 'unrecognized-private-value' }];
+  platformFailure(state, 'x', 'partial', now, state.platforms.x.partial);
+  state.platforms.x.partial = [];
+  platformRecovered(state, 'x', now + 1000, { full: true });
+  assert.deepEqual(state.connectionLog[0].sectionErrors, { network: 2, maintenance: 1, site: 1 });
+  assert.ok(!JSON.stringify(state.connectionLog).includes('private'));
+});
+
 test('a fresh incident after recovery is sent immediately, continuous failure is not spammed', async () => {
   const state = stateAt();
   drop(state, 'x', now);
